@@ -35,16 +35,16 @@ h2 { font-size: 16px; color: #0f172a; font-weight: 700; }
 /* Линия Б: горизонтальный ряд в центре сверху */
 .parking-row-top { background: #f8fafc; padding: 15px; border: 1px solid #cbd5e1; border-radius: 8px 8px 0 0; }
 .parking-row-top h3 { font-size: 13px; margin-bottom: 10px; color: #334155; }
-.slots-horizontal-container { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.slots-horizontal-container { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; min-height: 50px; }
 
 /* Боковые вертикальные Линии А и В */
-.parking-column { background: #f8fafc; padding: 15px; border: 1px solid #cbd5e1; border-radius: 8px; }
+.parking-column { background: #f8fafc; padding: 15px; border: 1px solid #cbd5e1; border-radius: 8px; min-height: 400px; }
 .parking-column h3 { font-size: 13px; margin-bottom: 12px; color: #334155; font-weight: 600; }
-.slots-container { display: flex; flex-direction: column; gap: 8px; }
+.slots-container { display: flex; flex-direction: column; gap: 8px; min-height: 350px; }
 
-/* Сдвоенный блок для Линий Д и Г */
+/* Сдвоенный block для Линий Д и Г */
 .double-column-block { display: grid; grid-template-columns: 1fr 1fr; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0 0 8px 8px; gap: 0; }
-.double-column-block .parking-column { border: none; background: transparent; }
+.double-column-block .parking-column { border: none; background: transparent; min-height: auto; }
 .double-column-block .border-right { border-right: 2px dashed #cbd5e1 !important; border-radius: 0; }
 
 /* СТИЛИ ПРОЕЗДОВ ДЛЯ МАШИН (БУКВА П) */
@@ -52,8 +52,8 @@ h2 { font-size: 16px; color: #0f172a; font-weight: 700; }
 .driveway.vertical { writing-mode: vertical-lr; text-orientation: upright; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; padding: 20px 0; }
 .driveway.horizontal { height: 50px; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; }
 
-/* СТИЛИ КАРТОЧЕК МЕСТ С ЭФФЕКТОМ ПОДСВЕТКИ (HOVER) [image_FWri6P.png] */
-.slot-card { padding: 10px 12px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; font-size: 12px; line-height: 1.4; background: white; transition: all 0.15s ease-in-out; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+/* СТИЛИ КАРТОЧЕК МЕСТ С ЭФФЕКТОМ ПОДСВЕТКИ (HOVER) */
+.slot-card { padding: 10px 12px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; font-size: 12px; line-height: 1.4; background: white; transition: all 0.15s ease-in-out; box-shadow: 0 1px 2px rgba(0,0,0,0.05); display: block !important; height: auto !important; min-height: 45px; }
 
 /* Эффект живой подсветки при наведении мыши */
 .slot-card:hover { 
@@ -98,3 +98,4 @@ form input, form textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e
 .save-btn:not(:disabled) { background: #4b5563; }
 .save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .delete-btn { background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+
