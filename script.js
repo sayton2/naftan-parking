@@ -1,4 +1,3 @@
-// Выделенная стабильная база данных Google Firebase для стоянки Нафтан
 const CLOUD_URL = "https://firebaseio.com";
 
 let parkingSlots = [];
@@ -6,10 +5,13 @@ let activeSlotId = null;
 
 // Старт системы
 function initSystem() {
-    generateFreshDatabase(); // Сразу выводим пустую сетку на экран
-    loadFromCloud();         // Подгружаем актуальные брони из интернета
+    // Шаг 1. Первичная принудительная генерация сетки на экране
+    forceBuildLocalGrid();
     
-    // Авто-проверка обновлений каждые 4 секунды для связи админа и охраны
+    // Шаг 2. Загрузка данных из облака
+    loadFromCloud();
+    
+    // Шаг 3. Авто-проверка каждые 4 секунды
     setInterval(loadFromCloud, 4000);
     
     setupValidationListeners();
@@ -22,20 +24,22 @@ function loadFromCloud() {
         return res.json();
     })
     .then(data => {
+        // Если в облаке есть данные — берем их
         if (data && data.length > 0) {
             parkingSlots = data;
-            recalculateSystem(); // Перерисовываем актуальные цвета и данные
+            recalculateSystem();
+        } else {
+            // Если в облаке пусто (null) — отправляем туда нашу сгенерированную сетку
+            saveToCloudBackend();
         }
     })
     .catch(err => {
-        console.log("Локальный режим работы...");
+        console.log("Локальный режим...");
         recalculateSystem();
     });
 }
 
-function generateFreshDatabase() {
-    if (parkingSlots.length > 0) return;
-    
+function forceBuildLocalGrid() {
     parkingSlots = [];
     for (let i = 1; i <= 54; i++) {
         let line = 'A';
@@ -63,7 +67,6 @@ function generateFreshDatabase() {
 }
 
 function saveToCloudBackend() {
-    // Метод PUT в Firebase сохраняет данные мгновенно и без токенов
     fetch(CLOUD_URL, {
         method: 'PUT',
         headers: { "Content-Type": "application/json" },
@@ -82,7 +85,7 @@ function recalculateSystem() {
             return;
         }
 
-        // Очистка от возможных старых битых данных
+        // Защита от дублирования строк
         if (typeof slot.start === 'string' && slot.start.includes(',')) slot.start = slot.start.split(',')[0];
         if (typeof slot.end === 'string' && slot.end.includes(',')) slot.end = slot.end.split(',')[0];
 
@@ -92,11 +95,11 @@ function recalculateSystem() {
         eDate.setHours(0,0,0,0);
         
         if (sDate <= today && eDate >= today) {
-            slot.status = 'busy'; // Занято (Красный)
+            slot.status = 'busy';
         } else if (sDate > today) {
-            slot.status = 'reserved'; // Забронировано (Желтый)
+            slot.status = 'reserved';
         } else {
-            slot.status = 'free'; // Свободно (Зеленый)
+            slot.status = 'free';
         }
     });
 
@@ -259,6 +262,7 @@ document.getElementById('btn-cancel-yes').onclick = () => {
 document.getElementById('btn-cancel-no').onclick = () => {
     document.getElementById('cancel-modal').style.display = 'none';
 };
+
 document.getElementById('close-booking').onclick = () => document.getElementById('booking-modal').style.display = 'none';
 document.getElementById('btn-booking-cancel').onclick = () => document.getElementById('booking-modal').style.display = 'none';
 function renderAbonnements() {
@@ -292,7 +296,7 @@ function formatDate(dateStr) {
 if (!dateStr) return '';
 const parts = dateStr.split('-');
 if (parts.length !== 3) return dateStr;
-return ${parts[2]}.${parts[1]}.${parts[0]}; // Идеальный вывод ДД.ММ.ГГГГ
+return ${parts[2]}.${parts[1]}.${parts[0]};
 }
 initSystem();
 
