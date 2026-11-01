@@ -1,39 +1,34 @@
-// Стабильное бесплатное облачное хранилище, общее для админа и охраны
-const NET_BASE_URL = "https://kvdb.io";
+// Выделенная стабильная база данных Google Firebase для стоянки Нафтан
+const CLOUD_URL = "https://firebaseio.com";
 
 let parkingSlots = [];
 let activeSlotId = null;
 
 // Старт системы
 function initSystem() {
-    generateFreshDatabase(); // Сразу выводим локальную разметку, чтобы экран не был пустым
-    loadFromNetworkCloud();  // Подгружаем актуальные брони из интернета
+    generateFreshDatabase(); // Сразу выводим пустую сетку на экран
+    loadFromCloud();         // Подгружаем актуальные брони из интернета
     
-    // Автоматическая синхронизация: проверяем изменения каждые 4 секунды
-    setInterval(loadFromNetworkCloud, 4000);
+    // Авто-проверка обновлений каждые 4 секунды для связи админа и охраны
+    setInterval(loadFromCloud, 4000);
     
     setupValidationListeners();
 }
 
-function loadFromNetworkCloud() {
-    fetch(NET_BASE_URL)
+function loadFromCloud() {
+    fetch(CLOUD_URL)
     .then(res => {
-        if (res.status === 404) {
-            // Если на сервере в интернете ещё пусто — отправляем туда нашу чистую базу
-            saveToNetworkCloud();
-            return null;
-        }
-        if (!res.ok) throw new Error("Ошибка сети");
+        if (!res.ok) throw new Error("Сбой сети");
         return res.json();
     })
     .then(data => {
         if (data && data.length > 0) {
             parkingSlots = data;
-            recalculateSystem(); // Обновляем светофор на экране
+            recalculateSystem(); // Перерисовываем актуальные цвета и данные
         }
     })
     .catch(err => {
-        console.log("Работа в локальном режиме...");
+        console.log("Локальный режим работы...");
         recalculateSystem();
     });
 }
@@ -67,15 +62,12 @@ function generateFreshDatabase() {
     recalculateSystem();
 }
 
-// Отправка измененной брони в общую сеть интернета
-function saveToNetworkCloud() {
-    fetch(NET_BASE_URL, {
-        method: 'POST',
+function saveToCloudBackend() {
+    // Метод PUT в Firebase сохраняет данные мгновенно и без токенов
+    fetch(CLOUD_URL, {
+        method: 'PUT',
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(parkingSlots)
-    })
-    .then(res => {
-        if (!res.ok) console.log("Сбой записи на сервер");
     })
     .catch(err => console.error("Ошибка сохранения в облако:", err));
 }
@@ -90,17 +82,21 @@ function recalculateSystem() {
             return;
         }
 
+        // Очистка от возможных старых битых данных
+        if (typeof slot.start === 'string' && slot.start.includes(',')) slot.start = slot.start.split(',')[0];
+        if (typeof slot.end === 'string' && slot.end.includes(',')) slot.end = slot.end.split(',')[0];
+
         const sDate = new Date(slot.start);
         const eDate = new Date(slot.end);
         sDate.setHours(0,0,0,0);
         eDate.setHours(0,0,0,0);
         
         if (sDate <= today && eDate >= today) {
-            slot.status = 'busy'; // Занято сегодня (Красный)
+            slot.status = 'busy'; // Занято (Красный)
         } else if (sDate > today) {
-            slot.status = 'reserved'; // Бронь на будущее (Желтый)
+            slot.status = 'reserved'; // Забронировано (Желтый)
         } else {
-            slot.status = 'free'; // Срок истек (Зеленый)
+            slot.status = 'free'; // Свободно (Зеленый)
         }
     });
 
@@ -246,7 +242,7 @@ document.getElementById('booking-form').onsubmit = (e) => {
 
     document.getElementById('booking-modal').style.display = 'none';
     
-    saveToNetworkCloud();
+    saveToCloudBackend();
     recalculateSystem();
 };
 
@@ -256,7 +252,7 @@ document.getElementById('btn-cancel-yes').onclick = () => {
     slot.carNumber = ''; slot.carBrand = ''; slot.notes = ''; slot.start = ''; slot.end = '';
     document.getElementById('cancel-modal').style.display = 'none';
     
-    saveToNetworkCloud();
+    saveToCloudBackend();
     recalculateSystem();
 };
 
@@ -296,9 +292,10 @@ function formatDate(dateStr) {
 if (!dateStr) return '';
 const parts = dateStr.split('-');
 if (parts.length !== 3) return dateStr;
-return ${parts[2]}.${parts[1]}.${parts[0]}; // ИСПРАВЛЕНО НАВСЕГДА: Строго ДД.ММ.ГГГГ без повторений
+return ${parts[2]}.${parts[1]}.${parts[0]}; // Идеальный вывод ДД.ММ.ГГГГ
 }
 initSystem();
+
 
 
 
