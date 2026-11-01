@@ -1,12 +1,19 @@
-// Автономный бесплатный сетевой ключ базы данных (работает без токенов)
 const NET_URL = "https://kvdb.io";
 
 let parkingSlots = [];
 let activeSlotId = null;
 
+// Старт системы: сначала мгновенно создаем места локально, затем качаем из сети
 function initSystem() {
+    // 1. Сразу строим базу в памяти, чтобы экран не был пустым
+    generateFreshDatabase();
+    
+    // 2. Загружаем актуальные данные из общей сети
     loadFromNetwork();
-    setInterval(loadFromNetwork, 5000); // Авто-синхронизация каждые 5 секунд
+    
+    // 3. Каждые 5 секунд проверяем, не внёс ли изменения другой пользователь
+    setInterval(loadFromNetwork, 5000);
+    
     setupValidationListeners();
 }
 
@@ -14,20 +21,18 @@ function loadFromNetwork() {
     fetch(NET_URL)
     .then(res => {
         if (res.status === 404) {
-            generateFreshDatabase();
-            throw new Error("Первый запуск: база создается...");
+            saveToNetwork(); // Если на сервере пусто — заливаем нашу чистую базу
+            return null;
         }
         return res.json();
     })
     .then(data => {
         if (data && data.length > 0) {
             parkingSlots = data;
-            recalculateSystem();
+            recalculateSystem(); // Перерисовываем экран актуальными данными из сети
         }
     })
-    .catch(err => {
-        if (parkingSlots.length === 0) generateFreshDatabase();
-    });
+    .catch(err => console.log("Синхронизация с сетью..."));
 }
 
 function generateFreshDatabase() {
@@ -44,6 +49,7 @@ function generateFreshDatabase() {
             hotelNum: '', phone: '', carNumber: '', carBrand: '',
             notes: '', start: '', end: '', status: 'free'
         };
+        // НафтанТранс по умолчанию
         if (i <= 15) {
             slot.lastName = 'НафтанТранс';
             slot.carBrand = 'Фирма';
@@ -53,14 +59,14 @@ function generateFreshDatabase() {
         }
         parkingSlots.push(slot);
     }
-    saveToNetwork();
+    recalculateSystem(); // ИСПРАВЛЕНО: Теперь сразу выводим места на экран!
 }
 
 function saveToNetwork() {
     fetch(NET_URL, {
         method: 'POST',
         body: JSON.stringify(parkingSlots)
-    }).catch(err => console.error("Ошибка сети:", err));
+    }).catch(err => console.error("Ошибка отправки данных в сеть:", err));
 }
 
 function recalculateSystem() {
@@ -98,7 +104,7 @@ function renderLayout() {
         'V': document.getElementById('slots-v'), 'G': document.getElementById('slots-g'),
         'D': document.getElementById('slots-d')
     };
-    Object.values(containers).forEach(c => c.innerHTML = '');
+    Object.values(containers).forEach(c => { if(c) c.innerHTML = ''; });
 
     parkingSlots.forEach(slot => {
         const card = document.createElement('div');
@@ -115,9 +121,9 @@ function renderLayout() {
         card.onclick = () => handleSlotClick(slot.id);
 
         if (slot.line === 'A') {
-            containers['A'].insertBefore(card, containers['A'].firstChild);
+            if(containers['A']) containers['A'].insertBefore(card, containers['A'].firstChild);
         } else {
-            containers[slot.line].appendChild(card);
+            if(containers[slot.line]) containers[slot.line].appendChild(card);
         }
     });
 }
@@ -169,7 +175,8 @@ function validateForm() {
     const hasDates = start !== '' && end !== '';
     const hasOneRequiredField = orderNum !== '' || lastName !== '' || hotelNum !== '';
 
-    document.getElementById('btn-submit-booking').disabled = !(hasDates && hasOneRequiredField);
+    const btn = document.getElementById('btn-submit-booking');
+    if(btn) btn.disabled = !(hasDates && hasOneRequiredField);
 }
 
 function renderIncompleteAlerts() {
@@ -207,7 +214,8 @@ function renderIncompleteAlerts() {
             }
         }
     });
-    document.getElementById('alert-badge-count').innerText = `карточек: ${count}`;
+    const badge = document.getElementById('alert-badge-count');
+    if(badge) badge.innerText = `карточек: ${count}`;
 }
 
 document.getElementById('booking-form').onsubmit = (e) => {
@@ -254,11 +262,11 @@ function renderAbonnements() {
     
     let sortedAbonnements = [...parkingSlots].sort((a,b) => a.id - b.id);
 
-    sortedAbonnements.forEach(slot => {
-        if (slot.start && slot.end) {
-            const days = Math.ceil(Math.abs(new Date(slot.end) - new Date(slot.start)) / (1000 * 60 * 60 * 24));
-            if (days > 10) {
-                const tr = document.createElement('tr');
+sortedAbonnements.forEach(slot => {
+if (slot.start && slot.end) {
+const days = Math.ceil(Math.abs(new Date(slot.end) - new Date(slot.start)) / (1000 * 60 * 60 * 24));
+if (days > 10) {
+const tr = document.createElement('tr');
 tr.innerHTML = <td><strong>Место ${slot.id}</strong></td><td>${slot.lastName || '—'}</td><td>${slot.carBrand || '—'}</td><td>${slot.carNumber || '—'}</td><td>${slot.phone || '—'}</td><td>с ${formatDate(slot.start)} по ${formatDate(slot.end)} (${days} дн.)</td>;
 tbody.appendChild(tr);
 }
@@ -268,16 +276,19 @@ tbody.appendChild(tr);
 function updateCounters() {
 let f = 0, b = 0, r = 0;
 parkingSlots.forEach(s => { if(s.status === 'free') f++; if(s.status === 'busy') b++; if(s.status === 'reserved') r++; });
-document.getElementById('free-count').innerText = f;
-document.getElementById('busy-count').innerText = b;
-document.getElementById('reserved-count').innerText = r;
+const elF = document.getElementById('free-count');
+const elB = document.getElementById('busy-count');
+const elR = document.getElementById('reserved-count');
+if(elF) elF.innerText = f;
+if(elB) elB.innerText = b;
+if(elR) elR.innerText = r;
 }
 function getLineName(l) { return l === 'B'?'Б':l === 'V'?'В':l === 'G'?'Г':'Д'; }
 function formatDate(dateStr) {
 if (!dateStr) return '';
 const parts = dateStr.split('-');
 if (parts.length !== 3) return dateStr;
-return ${parts[2]}.${parts[1]}.${parts[0]};
+return ${parts}.${parts}.${parts};
 }
 initSystem();
 
