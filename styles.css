@@ -1,0 +1,100 @@
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+body { background-color: #f4f6f9; color: #333; padding-bottom: 60px; }
+header { background: white; padding: 15px 40px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; }
+h1 { font-size: 18px; color: #0f172a; }
+nav a { text-decoration: none; color: #64748b; margin-left: 20px; font-weight: 600; padding: 8px 16px; border-radius: 6px; font-size: 14px; }
+nav a.active, nav a:hover { color: #0f172a; background: #f1f5f9; }
+main { max-width: 1500px; margin: 20px auto; padding: 0 20px; }
+
+.stats { display: flex; gap: 15px; margin-bottom: 20px; }
+.stat-box { background: white; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; flex: 1; font-size: 12px; color: #64748b; }
+.stat-box strong { font-size: 20px; color: #0f172a; display: inline-block; margin-top: 4px; }
+.subtitle { font-size: 13px; color: #64748b; margin-bottom: 15px; }
+
+.parking-container, .alert-section, .table-section { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+h2 { font-size: 16px; color: #0f172a; font-weight: 700; }
+
+.legend { display: flex; gap: 12px; margin-bottom: 25px; font-size: 12px; }
+.leg-item { padding: 4px 12px; border-radius: 6px; font-weight: 600; border: 1px solid transparent; }
+
+/* КАРТА СТОЯНКИ С ПРОЕЗДОМ БУКВОЙ П */
+.parking-grid-main { 
+    display: grid; 
+    grid-template-columns: 1fr 60px 2fr 60px 1fr; 
+    gap: 0px; 
+    align-items: stretch; 
+}
+
+/* Центральный столб, объединяющий Линию Б, дорогу и Линии Д/Г */
+.center-parking-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0px;
+}
+
+/* Линия Б: горизонтальный ряд в центре сверху */
+.parking-row-top { background: #f8fafc; padding: 15px; border: 1px solid #cbd5e1; border-radius: 8px 8px 0 0; }
+.parking-row-top h3 { font-size: 13px; margin-bottom: 10px; color: #334155; }
+.slots-horizontal-container { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+
+/* Боковые вертикальные Линии А и В */
+.parking-column { background: #f8fafc; padding: 15px; border: 1px solid #cbd5e1; border-radius: 8px; }
+.parking-column h3 { font-size: 13px; margin-bottom: 12px; color: #334155; font-weight: 600; }
+.slots-container { display: flex; flex-direction: column; gap: 8px; }
+
+/* Сдвоенный блок для Линий Д и Г */
+.double-column-block { display: grid; grid-template-columns: 1fr 1fr; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0 0 8px 8px; gap: 0; }
+.double-column-block .parking-column { border: none; background: transparent; }
+.double-column-block .border-right { border-right: 2px dashed #cbd5e1 !important; border-radius: 0; }
+
+/* СТИЛИ ПРОЕЗДОВ ДЛЯ МАШИН (БУКВА П) */
+.driveway { background-color: #e2e8f0; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-weight: bold; font-size: 11px; letter-spacing: 2px; }
+.driveway.vertical { writing-mode: vertical-lr; text-orientation: upright; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; padding: 20px 0; }
+.driveway.horizontal { height: 50px; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; }
+
+/* СТИЛИ КАРТОЧЕК МЕСТ С ЭФФЕКТОМ ПОДСВЕТКИ (HOVER) [image_FWri6P.png] */
+.slot-card { padding: 10px 12px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; font-size: 12px; line-height: 1.4; background: white; transition: all 0.15s ease-in-out; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+/* Эффект живой подсветки при наведении мыши */
+.slot-card:hover { 
+    transform: translateY(-2px); 
+    box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+    filter: brightness(0.98);
+}
+.status-free:hover { border-color: #059669; }
+.status-busy:hover { border-color: #dc2626; }
+.status-reserved:hover { border-color: #d97706; }
+
+.slot-card .name { font-weight: 700; font-size: 13px; }
+.slot-card .dates { opacity: 0.85; margin-top: 3px; font-size: 11px; }
+
+/* БАЗОВЫЕ ЦВЕТА СВЕТОФОРА */
+.status-free { background-color: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+.status-busy { background-color: #fef2f2; border-color: #fecaca; color: #991b1b; }
+.status-reserved { background-color: #fefce8; border-color: #fef08a; color: #854d0e; }
+
+/* ИНТЕРФЕЙС ТАБЛИЦ И ПРЕДУПРЕЖДЕНИЙ */
+.alert-header { display: flex; justify-content: space-between; align-items: center; }
+.badge { background: #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; color: #475569; }
+.alert-list { display: flex; flex-direction: column; gap: 8px; margin-top: 15px; }
+.alert-card { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-radius: 8px; border: 1px solid #fef08a; background: #fffdf5; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.alert-card:hover { transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+.data-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+.data-table th, .data-table td { text-align: left; padding: 12px; border-bottom: 1px solid #e2e8f0; }
+.data-table th { background: #f8fafc; color: #475569; }
+
+/* МОДАЛЬНЫЕ ОКНА */
+.modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+.modal-content { background: white; margin: 4% auto; padding: 24px; border-radius: 12px; max-width: 500px; width: 90%; position: relative; }
+.confirmation-modal { max-width: 400px; margin-top: 12%; text-align: center; }
+.close-button { position: absolute; right: 20px; top: 15px; font-size: 24px; cursor: pointer; color: #94a3b8; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-full { margin-top: 12px; }
+form label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: #334155; }
+form input, form textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; background: #f8fafc; }
+.form-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.cancel-btn { background: #f1f5f9; color: #0f172a; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+.save-btn { background: #71717a; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+.save-btn:not(:disabled) { background: #4b5563; }
+.save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.delete-btn { background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Стоянка Нафтан</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="logo-area">
+            <h1>Стоянка Нафтан</h1>
+        </div>
+        <nav>
+            <a href="#" class="active" id="nav-places">Места</a>
+            <a href="#" id="nav-abonnements">Абонемент</a>
+        </nav>
+    </header>
+
+    <main>
+        <!-- Секция "Места" (Основной экран парковки) -->
+        <div id="section-places-content">
+            <section class="stats">
+                <div class="stat-box">Всего мест: <strong>54</strong><br><small>линии А, Б, В, Г, Д</small></div>
+                <div class="stat-box free">Свободно: <strong id="free-count">0</strong><br><small>готовы к заезду</small></div>
+                <div class="stat-box busy">Занято: <strong id="busy-count">0</strong><br><small>машины на стоянке сегодня</small></div>
+                <div class="stat-box reserved">Забронировано: <strong id="reserved-count">0</strong><br><small>заезды с будущей даты</small></div>
+            </section>
+
+            <section class="parking-container">
+                <h2>Схема стоянки</h2>
+                <p class="subtitle">Интерактивная карта стоянки. Проезд выполнен единым контуром буквой «П». Наведите курсор на место, чтобы подсветить его.</p>
+                
+                <div class="legend">
+                    <span class="leg-item status-free">Свободно</span>
+                    <span class="leg-item status-busy">Занято</span>
+                    <span class="leg-item status-reserved">Забронировано</span>
+                </div>
+
+                <!-- ЕДИНАЯ СЕТКА СТОЯНКИ БУКВОЙ П -->
+                <div class="parking-grid-main">
+                    
+                    <!-- ЛЕВАЯ КОЛОНКА: Линия А (1-15) -->
+                    <div class="parking-column" id="col-a">
+                        <h3>Линия А <small>01-15</small></h3>
+                        <div class="slots-container" id="slots-a"></div>
+                    </div>
+
+                    <!-- ЛЕВЫЙ ВЕРТИКАЛЬНЫЙ ПРОЕЗД -->
+                    <div class="driveway vertical">ПРОЕЗД</div>
+
+                    <!-- ЦЕНТРАЛЬНЫЙ БЛОК: Линия Б сверху, под ней проезд, под ним Д и Г -->
+                    <div class="center-parking-block">
+                        
+                        <!-- Линия Б (16-20 слева направо строго над проездами и Д/Г) -->
+                        <div class="parking-row-top" id="row-b">
+                            <h3>Линия Б <small>16-20</small></h3>
+                            <div class="slots-horizontal-container" id="slots-b"></div>
+                        </div>
+
+                        <!-- ГОРИЗОНТАЛЬНЫЙ ПРОЕЗД (Замыкает букву П) -->
+                        <div class="driveway horizontal">ПРОЕЗД ДЛЯ МАШИН</div>
+
+                        <!-- Сдвоенный блок Д и Г в самом низу центра -->
+                        <div class="double-column-block">
+                            <div class="parking-column border-right" id="col-d">
+                                <h3>Линия Д <small>44-54</small></h3>
+                                <div class="slots-container" id="slots-d"></div>
+                            </div>
+                            <div class="parking-column" id="col-g">
+                                <h3>Линия Г <small>33-43</small></h3>
+                                <div class="slots-container" id="slots-g"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ПРАВЫЙ ВЕРТИКАЛЬНЫЙ ПРОЕЗД -->
+                    <div class="driveway vertical">ПРОЕЗД</div>
+
+                    <!-- ПРАВАЯ КОЛОНКА: Линия В (21-32 сверху вниз) -->
+                    <div class="parking-column" id="col-v">
+                        <h3>Линия В <small>21-32</small></h3>
+                        <div class="slots-container" id="slots-v"></div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- Блок "Требуют полного заполнения" внизу -->
+            <section class="alert-section">
+                <div class="alert-header">
+                    <h2>Требуют полного заполнения</h2>
+                    <span class="badge" id="alert-badge-count">карточек: 0</span>
+                </div>
+                <p class="subtitle">Карточка заполнена не полностью. Места 1–15 арендованы «НафтанТранс» и не проверяются.</p>
+                <div id="incomplete-slots-list" class="alert-list"></div>
+            </section>
+        </div>
+
+        <!-- Секция "Абонемент" -->
+        <div id="section-abonnements-content" style="display: none;">
+            <section class="table-section">
+                <h2>Длинные брони (дольше 10 дней)</h2>
+                <p class="subtitle">Список активных бронирований, длительность которых составляет более 10 дней.</p>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Место</th>
+                            <th>Фамилия</th>
+                            <th>Марка авто</th>
+                            <th>Госномер</th>
+                            <th>Телефон</th>
+                            <th>Срок действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="abonnements-table-body"></tbody>
+                </table>
+            </section>
+        </div>
+    </main>
+
+    <!-- Окно регистрации (Забронировать место) -->
+    <div id="booking-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" id="close-booking">&times;</span>
+            <h2>Забронировать место</h2>
+            <p class="modal-subtitle" id="modal-slot-info">Место --, линия --.</p>
+            
+            <form id="booking-form">
+                <div class="form-grid">
+                    <div>
+                        <label for="input-orderNum">Номер заказа</label>
+                        <input type="text" id="input-orderNum" placeholder="000123">
+                    </div>
+                    <div>
+                        <label for="input-lastName">Фамилия</label>
+                        <input type="text" id="input-lastName" placeholder="Иванов">
+                    </div>
+                    <div>
+                        <label for="input-hotelNum">Номер отеля</label>
+                        <input type="text" id="input-hotelNum" placeholder="12">
+                    </div>
+                    <div>
+                        <label for="input-phone">Телефон</label>
+                        <input type="text" id="input-phone" placeholder="+375 29 123-45-67">
+                    </div>
+                    <div>
+                        <label for="input-carNumber">Номер автомобиля</label>
+                        <input type="text" id="input-carNumber" placeholder="1234 AB-5">
+                    </div>
+                    <div>
+                        <label for="input-carBrand">Марка и модель</label>
+                        <input type="text" id="input-carBrand" placeholder="Kia Rio">
+                    </div>
+                </div>
+
+                <div class="form-full">
+                    <label for="input-notes">Примечания</label>
+                    <textarea id="input-notes" rows="3" placeholder="Особые отметки..."></textarea>
+                </div>
+
+                <div class="form-grid">
+                    <div>
+                        <label for="input-start">Дата заезда</label>
+                        <input type="date" id="input-start">
+                    </div>
+                    <div>
+                        <label for="input-end">Дата выезда</label>
+                        <input type="date" id="input-end">
+                    </div>
+                </div>
+
+                <p class="form-notice">На схеме стоянки место станет красным, если бронь уже действует, и жёлтым, если заезд ещё впереди.</p>
+
+                <div class="form-buttons">
+                    <button type="button" class="cancel-btn" id="btn-booking-cancel">Отмена</button>
+                    <button type="submit" class="save-btn" id="btn-submit-booking" disabled>Забронировать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Окно отмены бронирования -->
+    <div id="cancel-modal" class="modal">
+        <div class="modal-content confirmation-modal">
+            <h2>Отмена бронирования</h2>
+            <p id="cancel-modal-text" style="margin: 15px 0; font-size: 14px; color: #444;"></p>
+            <div class="form-buttons">
+                <button type="button" class="cancel-btn" id="btn-cancel-no">Нет</button>
+                <button type="button" class="delete-btn" id="btn-cancel-yes">Да, отменить бронь</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
