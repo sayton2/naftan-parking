@@ -1,26 +1,27 @@
-const API_URL = "https://jsonbin.io";
-const MASTER_KEY = "$2a$10$X86.K9ZqB6I0oIqMh.p1u.Vb7OskA7Z7f8gK4hMk8Y7D5E5v4e6S."; 
+// Автономный бесплатный сетевой ключ базы данных (работает без токенов)
+const NET_URL = "https://kvdb.io";
 
 let parkingSlots = [];
 let activeSlotId = null;
 
 function initSystem() {
-    loadFromCloud();
-    setInterval(loadFromCloud, 5000);
+    loadFromNetwork();
+    setInterval(loadFromNetwork, 5000); // Авто-синхронизация каждые 5 секунд
     setupValidationListeners();
 }
 
-function loadFromCloud() {
-    fetch(`${API_URL}6725227facd3cb34a8a04fa7/latest`, {
-        headers: { "X-Master-Key": MASTER_KEY }
-    })
+function loadFromNetwork() {
+    fetch(NET_URL)
     .then(res => {
-        if (!res.ok) throw new Error("Ошибка сервера");
+        if (res.status === 404) {
+            generateFreshDatabase();
+            throw new Error("Первый запуск: база создается...");
+        }
         return res.json();
     })
-    .then(resData => {
-        if (resData && resData.record) {
-            parkingSlots = resData.record;
+    .then(data => {
+        if (data && data.length > 0) {
+            parkingSlots = data;
             recalculateSystem();
         }
     })
@@ -52,19 +53,14 @@ function generateFreshDatabase() {
         }
         parkingSlots.push(slot);
     }
-    saveToCloudBackend();
+    saveToNetwork();
 }
 
-function saveToCloudBackend() {
-    fetch(`${API_URL}6725227facd3cb34a8a04fa7`, {
-        method: 'PUT',
-        headers: {
-            "Content-Type": "application/json",
-            "X-Master-Key": MASTER_KEY
-        },
+function saveToNetwork() {
+    fetch(NET_URL, {
+        method: 'POST',
         body: JSON.stringify(parkingSlots)
-    })
-    .catch(err => console.error("Ошибка сети:", err));
+    }).catch(err => console.error("Ошибка сети:", err));
 }
 
 function recalculateSystem() {
@@ -230,7 +226,7 @@ document.getElementById('booking-form').onsubmit = (e) => {
 
     document.getElementById('booking-modal').style.display = 'none';
     
-    saveToCloudBackend();
+    saveToNetwork();
     recalculateSystem();
 };
 
@@ -240,7 +236,7 @@ document.getElementById('btn-cancel-yes').onclick = () => {
     slot.carNumber = ''; slot.carBrand = ''; slot.notes = ''; slot.start = ''; slot.end = '';
     document.getElementById('cancel-modal').style.display = 'none';
     
-    saveToCloudBackend();
+    saveToNetwork();
     recalculateSystem();
 };
 
