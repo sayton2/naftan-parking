@@ -1,4 +1,3 @@
-// Стабильная открытая интернет-база, защищенная от блокировок GitHub
 const CLOUD_STORAGE_URL = "https://jsonbin.io";
 const ACCESS_SECRET_KEY = "$2a$10$X86.K9ZqB6I0oIqMh.p1u.Vb7OskA7Z7f8gK4hMk8Y7D5E5v4e6S.";
 
@@ -7,8 +6,8 @@ let activeSlotId = null;
 
 // Старт системы
 function initSystem() {
-    buildInitialGrid(); // Мгновенно выводим сетку на экран при запуске
-    loadDataFromCloud(); // Подгружаем сохраненную бронь из сети
+    buildInitialGrid();  // СРАЗУ принудительно выводим места на экран локально!
+    loadDataFromCloud(); // Проверяем, есть ли сохраненная бронь в сети
     
     // Автоматическая проверка обновлений для охраны каждые 4 секунды
     setInterval(loadDataFromCloud, 4000);
@@ -25,9 +24,13 @@ function loadDataFromCloud() {
         return res.json();
     })
     .then(resData => {
+        // Если в облаке есть актуальные данные — берем их
         if (resData && resData.record && resData.record.length > 0) {
             parkingSlots = resData.record;
             recalculateSystem();
+        } else {
+            // Если в облаке пусто (null) — принудительно отправляем туда нашу сетку
+            sendDataToCloud();
         }
     })
     .catch(err => {
@@ -37,7 +40,6 @@ function loadDataFromCloud() {
 }
 
 function buildInitialGrid() {
-    if (parkingSlots.length > 0) return;
     parkingSlots = [];
     for (let i = 1; i <= 54; i++) {
         let line = 'A';
@@ -70,7 +72,7 @@ function sendDataToCloud() {
             "Content-Type": "application/json",
             "X-Master-Key": ACCESS_SECRET_KEY
         },
-        body: JSON.stringify({ record: parkingSlots }) // Правильная упаковка данных для сервера
+        body: JSON.stringify({ record: parkingSlots })
     })
     .catch(err => console.error("Ошибка сети при отправке:", err));
 }
@@ -83,14 +85,6 @@ function recalculateSystem() {
         if (!slot.start || !slot.end) {
             slot.status = 'free';
             return;
-        }
-
-        // Очистка базы от старых сбоев с запятыми (исправляет даты НафтанТранс)
-        if (typeof slot.start === 'string' && slot.start.includes(',')) {
-            slot.start = slot.start.split(',')[0];
-        }
-        if (typeof slot.end === 'string' && slot.end.includes(',')) {
-            slot.end = slot.end.split(',')[0];
         }
 
         const sDate = new Date(slot.start);
@@ -112,7 +106,6 @@ function recalculateSystem() {
     renderIncompleteAlerts();
     updateCounters();
 }
-
 function renderLayout() {
     const containers = {
         'A': document.getElementById('slots-a'), 'B': document.getElementById('slots-b'),
@@ -262,43 +255,53 @@ document.getElementById('btn-cancel-yes').onclick = () => {
     sendDataToCloud();
     recalculateSystem();
 };
+
 document.getElementById('btn-cancel-no').onclick = () => {
-document.getElementById('cancel-modal').style.display = 'none';
+    document.getElementById('cancel-modal').style.display = 'none';
 };
+
 document.getElementById('close-booking').onclick = () => document.getElementById('booking-modal').style.display = 'none';
 document.getElementById('btn-booking-cancel').onclick = () => document.getElementById('booking-modal').style.display = 'none';
+
 function renderAbonnements() {
-const tbody = document.getElementById('abonnements-table-body');
-if (!tbody) return;
-tbody.innerHTML = '';
-let sortedAbonnements = [...parkingSlots].sort((a,b) => a.id - b.id);
-sortedAbonnements.forEach(slot => {
-if (slot.start && slot.end) {
-const days = Math.ceil(Math.abs(new Date(slot.end) - new Date(slot.start)) / (1000 * 60 * 60 * 24));
-if (days > 10) {
-const tr = document.createElement('tr');
-tr.innerHTML = <td><strong>Место ${slot.id}</strong></td><td>${slot.lastName || '—'}</td><td>${slot.carBrand || '—'}</td><td>${slot.carNumber || '—'}</td><td>${slot.phone || '—'}</td><td>с ${formatDate(slot.start)} по ${formatDate(slot.end)} (${days} дн.)</td>;
-tbody.appendChild(tr);
+    const tbody = document.getElementById('abonnements-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    
+    let sortedAbonnements = [...parkingSlots].sort((a,b) => a.id - b.id);
+
+    sortedAbonnements.forEach(slot => {
+        if (slot.start && slot.end) {
+            const days = Math.ceil(Math.abs(new Date(slot.end) - new Date(slot.start)) / (1000 * 60 * 60 * 24));
+            if (days > 10) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><strong>Место ${slot.id}</strong></td><td>${slot.lastName || '—'}</td><td>${slot.carBrand || '—'}</td><td>${slot.carNumber || '—'}</td><td>${slot.phone || '—'}</td><td>с ${formatDate(slot.start)} по ${formatDate(slot.end)} (${days} дн.)</td>`;
+                tbody.appendChild(tr);
+            }
+        }
+    });
 }
-}
-});
-}
+
 function updateCounters() {
-let f = 0, b = 0, r = 0;
-parkingSlots.forEach(s => { if(s.status === 'free') f++; if(s.status === 'busy') b++; if(s.status === 'reserved') r++; });
-const elF = document.getElementById('free-count');
-const elB = document.getElementById('busy-count');
-const elR = document.getElementById('reserved-count');
-if(elF) elF.innerText = f;
-if(elB) elB.innerText = b;
-if(elR) elR.innerText = r;
+    let f = 0, b = 0, r = 0;
+    parkingSlots.forEach(s => { if(s.status === 'free') f++; if(s.status === 'busy') b++; if(s.status === 'reserved') r++; });
+    
+    const elF = document.getElementById('free-count');
+    const elB = document.getElementById('busy-count');
+    const elR = document.getElementById('reserved-count');
+    
+    if(elF) elF.innerText = f; 
+    if(elB) elB.innerText = b; 
+    if(elR) elR.innerText = r;
 }
+
 function getLineName(l) { return l === 'B'?'Б':l === 'V'?'В':l === 'G'?'Г':'Д'; }
-// ИСПРАВЛЕННАЯ ФУНКЦИЯ ДАТЫ: Никаких повторений чисел
 function formatDate(dateStr) {
-if (!dateStr) return '';
-const parts = dateStr.split('-');
-if (parts.length !== 3) return dateStr;
-return ${parts[2]}.${parts[1]}.${parts[0]}; // Строго ДД.ММ.ГГГГ
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    return `${parts[2]}.${parts[1]}.${parts[0]}`; // ИСПРАВЛЕНО: Четкий вывод ДД.ММ.ГГГГ без кавычек и повторений
 }
+
 initSystem();
+
