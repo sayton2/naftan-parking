@@ -1,37 +1,39 @@
-const BIN_URL = "https://jsonbin.io";
-const MASTER_KEY = "$2a$10$X86.K9ZqB6I0oIqMh.p1u.Vb7OskA7Z7f8gK4hMk8Y7D5E5v4e6S.";
+// Стабильное бесплатное облачное хранилище, общее для админа и охраны
+const NET_BASE_URL = "https://kvdb.io";
 
 let parkingSlots = [];
 let activeSlotId = null;
 
 // Старт системы
 function initSystem() {
-    generateFreshDatabase(); // Сразу выводим локальную сетку
-    loadFromCloud();         // Загружаем актуальные данные из сети
+    generateFreshDatabase(); // Сразу выводим локальную разметку, чтобы экран не был пустым
+    loadFromNetworkCloud();  // Подгружаем актуальные брони из интернета
     
-    // Авто-проверка обновлений каждые 4 секунды для мгновенной связи админа и охраны
-    setInterval(loadFromCloud, 4000);
+    // Автоматическая синхронизация: проверяем изменения каждые 4 секунды
+    setInterval(loadFromNetworkCloud, 4000);
     
     setupValidationListeners();
 }
 
-function loadFromCloud() {
-    fetch(`${BIN_URL}/latest`, {
-        headers: { "X-Master-Key": MASTER_KEY }
-    })
+function loadFromNetworkCloud() {
+    fetch(NET_BASE_URL)
     .then(res => {
-        if (!res.ok) throw new Error("Сбой ответа сервера");
+        if (res.status === 404) {
+            // Если на сервере в интернете ещё пусто — отправляем туда нашу чистую базу
+            saveToNetworkCloud();
+            return null;
+        }
+        if (!res.ok) throw new Error("Ошибка сети");
         return res.json();
     })
-    .then(resData => {
-        // Сервер возвращает данные внутри объекта .record
-        if (resData && resData.record && resData.record.length > 0) {
-            parkingSlots = resData.record;
-            recalculateSystem();
+    .then(data => {
+        if (data && data.length > 0) {
+            parkingSlots = data;
+            recalculateSystem(); // Обновляем светофор на экране
         }
     })
     .catch(err => {
-        console.log("Сетевой запрос...");
+        console.log("Работа в локальном режиме...");
         recalculateSystem();
     });
 }
@@ -52,7 +54,7 @@ function generateFreshDatabase() {
             hotelNum: '', phone: '', carNumber: '', carBrand: '',
             notes: '', start: '', end: '', status: 'free'
         };
-        // Места 1-15 НафтанТранс по умолчанию
+        // НафтанТранс по умолчанию
         if (i <= 15) {
             slot.lastName = 'НафтанТранс';
             slot.carBrand = 'Фирма';
@@ -65,20 +67,17 @@ function generateFreshDatabase() {
     recalculateSystem();
 }
 
-// ИСПРАВЛЕНО: Упаковываем массив в правильный объект, как требует сервер
-function saveToCloudBackend() {
-    fetch(BIN_URL, {
-        method: 'PUT',
-        headers: {
-            "Content-Type": "application/json",
-            "X-Master-Key": MASTER_KEY
-        },
-        body: JSON.stringify({ record: parkingSlots }) // <--- КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ ТУТ!
+// Отправка измененной брони в общую сеть интернета
+function saveToNetworkCloud() {
+    fetch(NET_BASE_URL, {
+        method: 'POST',
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parkingSlots)
     })
     .then(res => {
-        if(!res.ok) console.log("Ошибка отправки данных");
+        if (!res.ok) console.log("Сбой записи на сервер");
     })
-    .catch(err => console.error("Ошибка сети:", err));
+    .catch(err => console.error("Ошибка сохранения в облако:", err));
 }
 
 function recalculateSystem() {
@@ -90,17 +89,18 @@ function recalculateSystem() {
             slot.status = 'free';
             return;
         }
+
         const sDate = new Date(slot.start);
         const eDate = new Date(slot.end);
         sDate.setHours(0,0,0,0);
         eDate.setHours(0,0,0,0);
         
         if (sDate <= today && eDate >= today) {
-            slot.status = 'busy';
+            slot.status = 'busy'; // Занято сегодня (Красный)
         } else if (sDate > today) {
-            slot.status = 'reserved';
+            slot.status = 'reserved'; // Бронь на будущее (Желтый)
         } else {
-            slot.status = 'free';
+            slot.status = 'free'; // Срок истек (Зеленый)
         }
     });
 
@@ -109,6 +109,7 @@ function recalculateSystem() {
     renderIncompleteAlerts();
     updateCounters();
 }
+
 function renderLayout() {
     const containers = {
         'A': document.getElementById('slots-a'), 'B': document.getElementById('slots-b'),
@@ -245,7 +246,7 @@ document.getElementById('booking-form').onsubmit = (e) => {
 
     document.getElementById('booking-modal').style.display = 'none';
     
-    saveToCloudBackend();
+    saveToNetworkCloud();
     recalculateSystem();
 };
 
@@ -255,58 +256,50 @@ document.getElementById('btn-cancel-yes').onclick = () => {
     slot.carNumber = ''; slot.carBrand = ''; slot.notes = ''; slot.start = ''; slot.end = '';
     document.getElementById('cancel-modal').style.display = 'none';
     
-    saveToCloudBackend();
+    saveToNetworkCloud();
     recalculateSystem();
 };
 
 document.getElementById('btn-cancel-no').onclick = () => {
     document.getElementById('cancel-modal').style.display = 'none';
 };
-
 document.getElementById('close-booking').onclick = () => document.getElementById('booking-modal').style.display = 'none';
 document.getElementById('btn-booking-cancel').onclick = () => document.getElementById('booking-modal').style.display = 'none';
-
 function renderAbonnements() {
-    const tbody = document.getElementById('abonnements-table-body');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    
-    let sortedAbonnements = [...parkingSlots].sort((a,b) => a.id - b.id);
-
-    sortedAbonnements.forEach(slot => {
-        if (slot.start && slot.end) {
-            const days = Math.ceil(Math.abs(new Date(slot.end) - new Date(slot.start)) / (1000 * 60 * 60 * 24));
-            if (days > 10) {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td><strong>Место ${slot.id}</strong></td><td>${slot.lastName || '—'}</td><td>${slot.carBrand || '—'}</td><td>${slot.carNumber || '—'}</td><td>${slot.phone || '—'}</td><td>с ${formatDate(slot.start)} по ${formatDate(slot.end)} (${days} дн.)</td>`;
-                tbody.appendChild(tr);
-            }
-        }
-    });
+const tbody = document.getElementById('abonnements-table-body');
+if (!tbody) return;
+tbody.innerHTML = '';
+let sortedAbonnements = [...parkingSlots].sort((a,b) => a.id - b.id);
+sortedAbonnements.forEach(slot => {
+if (slot.start && slot.end) {
+const days = Math.ceil(Math.abs(new Date(slot.end) - new Date(slot.start)) / (1000 * 60 * 60 * 24));
+if (days > 10) {
+const tr = document.createElement('tr');
+tr.innerHTML = <td><strong>Место ${slot.id}</strong></td><td>${slot.lastName || '—'}</td><td>${slot.carBrand || '—'}</td><td>${slot.carNumber || '—'}</td><td>${slot.phone || '—'}</td><td>с ${formatDate(slot.start)} по ${formatDate(slot.end)} (${days} дн.)</td>;
+tbody.appendChild(tr);
 }
-
+}
+});
+}
 function updateCounters() {
-    let f = 0, b = 0, r = 0;
-    parkingSlots.forEach(s => { if(s.status === 'free') f++; if(s.status === 'busy') b++; if(s.status === 'reserved') r++; });
-    
-    const elF = document.getElementById('free-count');
-    const elB = document.getElementById('busy-count');
-    const elR = document.getElementById('reserved-count');
-    
-    if(elF) elF.innerText = f; 
-    if(elB) elB.innerText = b; 
-    if(elR) elR.innerText = r;
+let f = 0, b = 0, r = 0;
+parkingSlots.forEach(s => { if(s.status === 'free') f++; if(s.status === 'busy') b++; if(s.status === 'reserved') r++; });
+const elF = document.getElementById('free-count');
+const elB = document.getElementById('busy-count');
+const elR = document.getElementById('reserved-count');
+if(elF) elF.innerText = f;
+if(elB) elB.innerText = b;
+if(elR) elR.innerText = r;
 }
-
 function getLineName(l) { return l === 'B'?'Б':l === 'V'?'В':l === 'G'?'Г':'Д'; }
 function formatDate(dateStr) {
-    if (!dateStr) return '';
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return dateStr;
-    return `${parts}.${parts}.${parts}`;
+if (!dateStr) return '';
+const parts = dateStr.split('-');
+if (parts.length !== 3) return dateStr;
+return ${parts[2]}.${parts[1]}.${parts[0]}; // ИСПРАВЛЕНО НАВСЕГДА: Строго ДД.ММ.ГГГГ без повторений
 }
-
 initSystem();
+
 
 
 
