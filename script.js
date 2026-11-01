@@ -1,16 +1,12 @@
-// Используем бесплатную и открытую сетевую базу данных, которой не нужны секретные токены GitHub
-const BIN_ID = "naftan_parking_global_v1";
-const API_URL = `https://jsonbin.io`;
-// Вспомогательный бесплатный ключ для демонстрационного режима (без ограничений GitHub)
+const API_URL = "https://jsonbin.io";
 const MASTER_KEY = "$2a$10$X86.K9ZqB6I0oIqMh.p1u.Vb7OskA7Z7f8gK4hMk8Y7D5E5v4e6S."; 
 
 let parkingSlots = [];
 let activeSlotId = null;
 
-// Старт системы: скачиваем общую базу данных через открытый API
 function initSystem() {
     loadFromCloud();
-    setInterval(loadFromCloud, 5000); // Автоматическое обновление для охраны каждые 5 секунд
+    setInterval(loadFromCloud, 5000);
     setupValidationListeners();
 }
 
@@ -19,10 +15,7 @@ function loadFromCloud() {
         headers: { "X-Master-Key": MASTER_KEY }
     })
     .then(res => {
-        if (res.status === 404 || res.status === 401) {
-            generateFreshDatabase();
-            throw new Error("База пуста или создается...");
-        }
+        if (!res.ok) throw new Error("Ошибка сервера");
         return res.json();
     })
     .then(resData => {
@@ -32,35 +25,34 @@ function loadFromCloud() {
         }
     })
     .catch(err => {
-        console.log("Сетевой запрос к базе данных...");
         if (parkingSlots.length === 0) generateFreshDatabase();
     });
 }
 
 function generateFreshDatabase() {
     parkingSlots = [];
-    for (let i = 1; i <= 15; i++) parkingSlots.push(createSlotObject(i, 'A'));
-    for (let i = 16; i <= 20; i++) parkingSlots.push(createSlotObject(i, 'B'));
-    for (let i = 21; i <= 32; i++) parkingSlots.push(createSlotObject(i, 'V'));
-    for (let i = 33; i <= 43; i++) parkingSlots.push(createSlotObject(i, 'G'));
-    for (let i = 44; i <= 54; i++) parkingSlots.push(createSlotObject(i, 'D'));
-    saveToCloudBackend();
-}
+    for (let i = 1; i <= 54; i++) {
+        let line = 'A';
+        if (i >= 16 && i <= 20) line = 'B';
+        else if (i >= 21 && i <= 32) line = 'V';
+        else if (i >= 33 && i <= 43) line = 'G';
+        else if (i >= 44 && i <= 54) line = 'D';
 
-function createSlotObject(i, line) {
-    let slot = {
-        id: i, line: line, orderNum: '', lastName: '',
-        hotelNum: '', phone: '', carNumber: '', carBrand: '',
-        notes: '', start: '', end: '', status: 'free'
-    };
-    if (i <= 15) {
-        slot.lastName = 'НафтанТранс';
-        slot.carBrand = 'Фирма';
-        slot.carNumber = 'ООО';
-        slot.start = '2026-11-01';
-        slot.end = '2027-12-01';
+        let slot = {
+            id: i, line: line, orderNum: '', lastName: '',
+            hotelNum: '', phone: '', carNumber: '', carBrand: '',
+            notes: '', start: '', end: '', status: 'free'
+        };
+        if (i <= 15) {
+            slot.lastName = 'НафтанТранс';
+            slot.carBrand = 'Фирма';
+            slot.carNumber = 'ООО';
+            slot.start = '2026-11-01';
+            slot.end = '2027-12-01';
+        }
+        parkingSlots.push(slot);
     }
-    return slot;
+    saveToCloudBackend();
 }
 
 function saveToCloudBackend() {
@@ -72,7 +64,7 @@ function saveToCloudBackend() {
         },
         body: JSON.stringify(parkingSlots)
     })
-    .catch(err => console.error("Ошибка синхронизации:", err));
+    .catch(err => console.error("Ошибка сети:", err));
 }
 
 function recalculateSystem() {
@@ -133,6 +125,7 @@ function renderLayout() {
         }
     });
 }
+
 function handleSlotClick(id) {
     const slot = parkingSlots.find(s => s.id === id);
     activeSlotId = id;
@@ -148,15 +141,15 @@ function handleSlotClick(id) {
 function openBookingFormDirect(slot) {
     document.getElementById('modal-slot-info').innerText = `Место ${slot.id}, линия ${getLineName(slot.line)}. Заполните поля карточки гостя.`;
     
-    document.getElementById('input-orderNum').value = slot.orderNum;
-    document.getElementById('input-lastName').value = slot.lastName;
-    document.getElementById('input-hotelNum').value = slot.hotelNum;
-    document.getElementById('input-phone').value = slot.phone;
-    document.getElementById('input-carNumber').value = slot.carNumber;
-    document.getElementById('input-carBrand').value = slot.carBrand;
-    document.getElementById('input-notes').value = slot.notes;
-    document.getElementById('input-start').value = slot.start;
-    document.getElementById('input-end').value = slot.end;
+    document.getElementById('input-orderNum').value = slot.orderNum || '';
+    document.getElementById('input-lastName').value = slot.lastName || '';
+    document.getElementById('input-hotelNum').value = slot.hotelNum || '';
+    document.getElementById('input-phone').value = slot.phone || '';
+    document.getElementById('input-carNumber').value = slot.carNumber || '';
+    document.getElementById('input-carBrand').value = slot.carBrand || '';
+    document.getElementById('input-notes').value = slot.notes || '';
+    document.getElementById('input-start').value = slot.start || '';
+    document.getElementById('input-end').value = slot.end || '';
     
     validateForm();
     document.getElementById('booking-modal').style.display = 'block';
@@ -165,7 +158,8 @@ function openBookingFormDirect(slot) {
 function setupValidationListeners() {
     const inputs = ['input-orderNum', 'input-lastName', 'input-hotelNum', 'input-start', 'input-end'];
     inputs.forEach(id => {
-        document.getElementById(id).addEventListener('input', validateForm);
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', validateForm);
     });
 }
 
@@ -184,6 +178,7 @@ function validateForm() {
 
 function renderIncompleteAlerts() {
     const container = document.getElementById('incomplete-slots-list');
+    if (!container) return;
     container.innerHTML = '';
     let count = 0;
 
@@ -258,6 +253,7 @@ document.getElementById('btn-booking-cancel').onclick = () => document.getElemen
 
 function renderAbonnements() {
     const tbody = document.getElementById('abonnements-table-body');
+    if (!tbody) return;
     tbody.innerHTML = '';
     
     let sortedAbonnements = [...parkingSlots].sort((a,b) => a.id - b.id);
@@ -267,35 +263,25 @@ function renderAbonnements() {
             const days = Math.ceil(Math.abs(new Date(slot.end) - new Date(slot.start)) / (1000 * 60 * 60 * 24));
             if (days > 10) {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td><strong>Место ${slot.id}</strong></td><td>${slot.lastName || '—'}</td><td>${slot.carBrand || '—'}</td><td>${slot.carNumber || '—'}</td><td>${slot.phone || '—'}</td><td>с ${formatDate(slot.start)} по ${formatDate(slot.end)} (${days} дн.)</td>`;
-                tbody.appendChild(tr);
-            }
-        }
-    });
+tr.innerHTML = <td><strong>Место ${slot.id}</strong></td><td>${slot.lastName || '—'}</td><td>${slot.carBrand || '—'}</td><td>${slot.carNumber || '—'}</td><td>${slot.phone || '—'}</td><td>с ${formatDate(slot.start)} по ${formatDate(slot.end)} (${days} дн.)</td>;
+tbody.appendChild(tr);
 }
-
+}
+});
+}
 function updateCounters() {
-    let f = 0, b = 0, r = 0;
-    parkingSlots.forEach(s => { if(s.status === 'free') f++; if(s.status === 'busy') b++; if(s.status === 'reserved') r++; });
-    document.getElementById('free-count').innerText = f; document.getElementById('busy-count').innerText = b; document.getElementById('reserved-count').innerText = r;
+let f = 0, b = 0, r = 0;
+parkingSlots.forEach(s => { if(s.status === 'free') f++; if(s.status === 'busy') b++; if(s.status === 'reserved') r++; });
+document.getElementById('free-count').innerText = f;
+document.getElementById('busy-count').innerText = b;
+document.getElementById('reserved-count').innerText = r;
 }
-
 function getLineName(l) { return l === 'B'?'Б':l === 'V'?'В':l === 'G'?'Г':'Д'; }
 function formatDate(dateStr) {
-    if (!dateStr) return '';
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return dateStr;
-    return `${parts}.${parts}.${parts}`;
+if (!dateStr) return '';
+const parts = dateStr.split('-');
+if (parts.length !== 3) return dateStr;
+return ${parts[2]}.${parts[1]}.${parts[0]};
 }
-
-document.getElementById('nav-places').onclick = (e) => { e.preventDefault(); switchTab('places'); };
-document.getElementById('nav-abonnements').onclick = (e) => { e.preventDefault(); switchTab('abonnements'); };
-function switchTab(t) {
-    document.getElementById('nav-places').className = t==='places'?'active':'';
-    document.getElementById('nav-abonnements').className = t==='abonnements'?'active':'';
-    document.getElementById('section-places-content').style.display = t==='places'?'block':'none';
-    document.getElementById('section-abonnements-content').style.display = t==='abonnements'?'block':'none';
-}
-
 initSystem();
 
