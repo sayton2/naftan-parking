@@ -1,4 +1,4 @@
-// Наш персональный защищенный облачный контейнер для парковки Нафтан
+// ИСПРАВЛЕНО: Уникальный постоянный онлайн-контейнер стоянки Нафтан в облаке
 const CLOUD_URL = "https://jsonstorage.net";
 
 let parkingSlots = [];
@@ -19,11 +19,15 @@ function initSystem() {
 function loadDataFromCloud() {
     fetch(CLOUD_URL, { cache: "no-store" })
     .then(res => {
+        if (res.status === 404) {
+            // Если сервер еще пустой — отправляем туда нашу стартовую сетку
+            sendDataToCloud();
+            return null;
+        }
         if (!res.ok) throw new Error("Сбой сети");
         return res.json();
     })
     .then(data => {
-        // Если в облаке есть данные — берем их
         if (data && data.length > 0) {
             parkingSlots = data;
             recalculateSystem();
@@ -103,7 +107,6 @@ function recalculateSystem() {
     renderIncompleteAlerts();
     updateCounters();
 }
-
 function renderLayout() {
     const containers = {
         'A': document.getElementById('slots-a'), 'B': document.getElementById('slots-b'),
@@ -262,37 +265,45 @@ document.getElementById('close-booking').onclick = () => document.getElementById
 document.getElementById('btn-booking-cancel').onclick = () => document.getElementById('booking-modal').style.display = 'none';
 
 function renderAbonnements() {
-const tbody = document.getElementById('abonnements-table-body');
-if (!tbody) return;
-tbody.innerHTML = '';
-let sortedAbonnements = [...parkingSlots].sort((a,b) => a.id - b.id);
-sortedAbonnements.forEach(slot => {
-if (slot.start && slot.end) {
-const days = Math.ceil(Math.abs(new Date(slot.end) - new Date(slot.start)) / (1000 * 60 * 60 * 24));
-if (days > 10) {
-const tr = document.createElement('tr');
-tr.innerHTML = <td><strong>Место ${slot.id}</strong></td><td>${slot.lastName || '—'}</td><td>${slot.carBrand || '—'}</td><td>${slot.carNumber || '—'}</td><td>${slot.phone || '—'}</td><td>с ${formatDate(slot.start)} по ${formatDate(slot.end)} (${days} дн.)</td>;
-tbody.appendChild(tr);
+    const tbody = document.getElementById('abonnements-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    
+    let sortedAbonnements = [...parkingSlots].sort((a,b) => a.id - b.id);
+
+    sortedAbonnements.forEach(slot => {
+        if (slot.start && slot.end) {
+            const days = Math.ceil(Math.abs(new Date(slot.end) - new Date(slot.start)) / (1000 * 60 * 60 * 24));
+            if (days > 10) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><strong>Место ${slot.id}</strong></td><td>${slot.lastName || '—'}</td><td>${slot.carBrand || '—'}</td><td>${slot.carNumber || '—'}</td><td>${slot.phone || '—'}</td><td>с ${formatDate(slot.start)} по ${formatDate(slot.end)} (${days} дн.)</td>`;
+                tbody.appendChild(tr);
+            }
+        }
+    });
 }
-}
-});
-}
+
 function updateCounters() {
-let f = 0, b = 0, r = 0;
-parkingSlots.forEach(s => { if(s.status === 'free') f++; if(s.status === 'busy') b++; if(s.status === 'reserved') r++; });
-const elF = document.getElementById('free-count');
-const elB = document.getElementById('busy-count');
-const elR = document.getElementById('reserved-count');
-if(elF) elF.innerText = f;
-if(elB) elB.innerText = b;
-if(elR) elR.innerText = r;
+    let f = 0, b = 0, r = 0;
+    parkingSlots.forEach(s => { if(s.status === 'free') f++; if(s.status === 'busy') b++; if(s.status === 'reserved') r++; });
+    
+    const elF = document.getElementById('free-count');
+    const elB = document.getElementById('busy-count');
+    const elR = document.getElementById('reserved-count');
+    
+    if(elF) elF.innerText = f; 
+    if(elB) elB.innerText = b; 
+    if(elR) elR.innerText = r;
 }
+
 function getLineName(l) { return l === 'B'?'Б':l === 'V'?'В':l === 'G'?'Г':'Д'; }
 function formatDate(dateStr) {
-if (!dateStr) return '';
-const parts = dateStr.split('-');
-if (parts.length !== 3) return dateStr;
-return ${parts}.${parts}.${parts};
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    return `${parts[2]}.${parts[1]}.${parts[0]}`;
 }
+
 initSystem();
+
 
