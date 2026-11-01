@@ -1,16 +1,15 @@
-// Стабильный международный сервер базы данных, открытый для всех провайдеров
 const BIN_URL = "https://jsonbin.io";
 const MASTER_KEY = "$2a$10$X86.K9ZqB6I0oIqMh.p1u.Vb7OskA7Z7f8gK4hMk8Y7D5E5v4e6S.";
 
 let parkingSlots = [];
 let activeSlotId = null;
 
-// Старт системы: мгновенно строим локальную сетку и подключаем интернет
+// Старт системы
 function initSystem() {
-    generateFreshDatabase(); // Сразу выводим пустые места, чтобы экран не был белым
-    loadFromCloud();         // Загружаем сохраненную бронь из сети
+    generateFreshDatabase(); // Сразу выводим локальную сетку
+    loadFromCloud();         // Загружаем актуальные данные из сети
     
-    // Каждые 4 секунды проверяем обновления для охраны без перезагрузки экрана
+    // Авто-проверка обновлений каждые 4 секунды для мгновенной связи админа и охраны
     setInterval(loadFromCloud, 4000);
     
     setupValidationListeners();
@@ -25,13 +24,14 @@ function loadFromCloud() {
         return res.json();
     })
     .then(resData => {
+        // Сервер возвращает данные внутри объекта .record
         if (resData && resData.record && resData.record.length > 0) {
             parkingSlots = resData.record;
             recalculateSystem();
         }
     })
     .catch(err => {
-        console.log("Локальный режим работы стоянки...");
+        console.log("Сетевой запрос...");
         recalculateSystem();
     });
 }
@@ -52,7 +52,7 @@ function generateFreshDatabase() {
             hotelNum: '', phone: '', carNumber: '', carBrand: '',
             notes: '', start: '', end: '', status: 'free'
         };
-        // Места 1-15 намертво бронируем за НафтанТранс по умолчанию
+        // Места 1-15 НафтанТранс по умолчанию
         if (i <= 15) {
             slot.lastName = 'НафтанТранс';
             slot.carBrand = 'Фирма';
@@ -65,6 +65,7 @@ function generateFreshDatabase() {
     recalculateSystem();
 }
 
+// ИСПРАВЛЕНО: Упаковываем массив в правильный объект, как требует сервер
 function saveToCloudBackend() {
     fetch(BIN_URL, {
         method: 'PUT',
@@ -72,9 +73,12 @@ function saveToCloudBackend() {
             "Content-Type": "application/json",
             "X-Master-Key": MASTER_KEY
         },
-        body: JSON.stringify(parkingSlots)
+        body: JSON.stringify({ record: parkingSlots }) // <--- КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ ТУТ!
     })
-    .catch(err => console.error("Ошибка отправки данных в сеть:", err));
+    .then(res => {
+        if(!res.ok) console.log("Ошибка отправки данных");
+    })
+    .catch(err => console.error("Ошибка сети:", err));
 }
 
 function recalculateSystem() {
@@ -92,11 +96,11 @@ function recalculateSystem() {
         eDate.setHours(0,0,0,0);
         
         if (sDate <= today && eDate >= today) {
-            slot.status = 'busy'; // Занято (Красный)
+            slot.status = 'busy';
         } else if (sDate > today) {
-            slot.status = 'reserved'; // Забронировано (Желтый)
+            slot.status = 'reserved';
         } else {
-            slot.status = 'free'; // Свободно (Зеленый)
+            slot.status = 'free';
         }
     });
 
@@ -299,9 +303,10 @@ function formatDate(dateStr) {
     if (!dateStr) return '';
     const parts = dateStr.split('-');
     if (parts.length !== 3) return dateStr;
-    return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    return `${parts}.${parts}.${parts}`;
 }
 
 initSystem();
+
 
 
