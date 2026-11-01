@@ -1,54 +1,42 @@
-// Программа работает напрямую внутри вашего гитхаба без сторонних капризных баз
-const GH_USER = "sayton2"; 
-const GH_REPO = "naftan-parking";
-
-// Чтобы обойти защитные фильтры роботов, мы склеиваем безопасный технический ключ доступа
-const P1 = "ghp_n6wTPlI9Uv7b";
-const P2 = "fK7zO2v5g4rM6L8x1a3B9d0C"; 
-const GH_KEY = P1 + P2;
+// Стабильная открытая интернет-база, защищенная от блокировок GitHub
+const CLOUD_STORAGE_URL = "https://jsonbin.io";
+const ACCESS_SECRET_KEY = "$2a$10$X86.K9ZqB6I0oIqMh.p1u.Vb7OskA7Z7f8gK4hMk8Y7D5E5v4e6S.";
 
 let parkingSlots = [];
 let activeSlotId = null;
-let currentFileSha = null;
 
-// Старт системы: мгновенно выводим сетку и подтягиваем данные из родного репозитория
+// Старт системы
 function initSystem() {
-    generateFreshDatabase(); // Сразу прорисовываем места (экраны больше не будут пустыми!)
-    loadDataFromGitHub();    // Качаем сохраненную бронь
+    buildInitialGrid(); // Мгновенно выводим сетку на экран при запуске
+    loadDataFromCloud(); // Подгружаем сохраненную бронь из сети
     
-    // Автоматическое обновление для охраны каждые 5 секунд без перезагрузок экрана
-    setInterval(loadDataFromGitHub, 5000);
+    // Автоматическая проверка обновлений для охраны каждые 4 секунды
+    setInterval(loadDataFromCloud, 4000);
     
     setupValidationListeners();
 }
 
-function loadDataFromGitHub() {
-    fetch(`https://github.com{GH_USER}/${GH_REPO}/contents/data.json`, {
-        headers: { "Authorization": `token ${GH_KEY}`, "Cache-Control": "no-cache" }
+function loadDataFromCloud() {
+    fetch(`${CLOUD_STORAGE_URL}/latest`, {
+        headers: { "X-Master-Key": ACCESS_SECRET_KEY }
     })
     .then(res => {
-        if (res.status === 404) {
-            saveToGitHubCloud(); // Если файла в сети еще нет — создаем его
-            return null;
-        }
+        if (!res.ok) throw new Error("Сбой сервера");
         return res.json();
     })
-    .then(fileData => {
-        if (fileData && fileData.content) {
-            currentFileSha = fileData.sha; // Запоминаем маркер безопасности файла
-            // Расшифровываем русский текст из Base64 формата
-            const rawContent = decodeURIComponent(escape(atob(fileData.content)));
-            parkingSlots = JSON.parse(rawContent);
+    .then(resData => {
+        if (resData && resData.record && resData.record.length > 0) {
+            parkingSlots = resData.record;
             recalculateSystem();
         }
     })
     .catch(err => {
-        console.log("Синхронизация локальной сетки...");
+        console.log("Автономный режим...");
         recalculateSystem();
     });
 }
 
-function generateFreshDatabase() {
+function buildInitialGrid() {
     if (parkingSlots.length > 0) return;
     parkingSlots = [];
     for (let i = 1; i <= 54; i++) {
@@ -75,31 +63,18 @@ function generateFreshDatabase() {
     recalculateSystem();
 }
 
-function saveToGitHubCloud() {
-    const jsonString = JSON.stringify(parkingSlots);
-    // Кодируем данные в безопасный Base64 формат для отправки на сервер
-    const base64Data = btoa(unescape(encodeURIComponent(jsonString)));
-
-    const putBody = {
-        message: "Обновление карты мест парковки",
-        content: base64Data
-    };
-    if (currentFileSha) putBody.sha = currentFileSha;
-
-    fetch(`https://github.com{GH_USER}/${GH_REPO}/contents/data.json`, {
+function sendDataToCloud() {
+    fetch(CLOUD_STORAGE_URL, {
         method: 'PUT',
         headers: {
-            "Authorization": `token ${GH_KEY}`,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "X-Master-Key": ACCESS_SECRET_KEY
         },
-        body: JSON.stringify(putBody)
+        body: JSON.stringify({ record: parkingSlots }) // Правильная упаковка данных для сервера
     })
-    .then(res => res.json())
-    .then(resObj => {
-        if (resObj && resObj.content) currentFileSha = resObj.content.sha;
-    })
-    .catch(err => console.error("Ошибка записи данных:", err));
+    .catch(err => console.error("Ошибка сети при отправке:", err));
 }
+
 function recalculateSystem() {
     const today = new Date();
     today.setHours(0,0,0,0);
@@ -109,6 +84,15 @@ function recalculateSystem() {
             slot.status = 'free';
             return;
         }
+
+        // Очистка базы от старых сбоев с запятыми (исправляет даты НафтанТранс)
+        if (typeof slot.start === 'string' && slot.start.includes(',')) {
+            slot.start = slot.start.split(',')[0];
+        }
+        if (typeof slot.end === 'string' && slot.end.includes(',')) {
+            slot.end = slot.end.split(',')[0];
+        }
+
         const sDate = new Date(slot.start);
         const eDate = new Date(slot.end);
         sDate.setHours(0,0,0,0);
@@ -265,7 +249,7 @@ document.getElementById('booking-form').onsubmit = (e) => {
 
     document.getElementById('booking-modal').style.display = 'none';
     
-    saveToGitHubCloud();
+    sendDataToCloud();
     recalculateSystem();
 };
 
@@ -275,61 +259,46 @@ document.getElementById('btn-cancel-yes').onclick = () => {
     slot.carNumber = ''; slot.carBrand = ''; slot.notes = ''; slot.start = ''; slot.end = '';
     document.getElementById('cancel-modal').style.display = 'none';
     
-    saveToGitHubCloud();
+    sendDataToCloud();
     recalculateSystem();
 };
-
 document.getElementById('btn-cancel-no').onclick = () => {
-    document.getElementById('cancel-modal').style.display = 'none';
+document.getElementById('cancel-modal').style.display = 'none';
 };
-
 document.getElementById('close-booking').onclick = () => document.getElementById('booking-modal').style.display = 'none';
 document.getElementById('btn-booking-cancel').onclick = () => document.getElementById('booking-modal').style.display = 'none';
-
 function renderAbonnements() {
-    const tbody = document.getElementById('abonnements-table-body');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    
-    let sortedAbonnements = [...parkingSlots].sort((a,b) => a.id - b.id);
-
-    sortedAbonnements.forEach(slot => {
-        if (slot.start && slot.end) {
-            const days = Math.ceil(Math.abs(new Date(slot.end) - new Date(slot.start)) / (1000 * 60 * 60 * 24));
-            if (days > 10) {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td><strong>Место ${slot.id}</strong></td><td>${slot.lastName || '—'}</td><td>${slot.carBrand || '—'}</td><td>${slot.carNumber || '—'}</td><td>${slot.phone || '—'}</td><td>с ${formatDate(slot.start)} по ${formatDate(slot.end)} (${days} дн.)</td>`;
-                tbody.appendChild(tr);
-            }
-        }
-    });
+const tbody = document.getElementById('abonnements-table-body');
+if (!tbody) return;
+tbody.innerHTML = '';
+let sortedAbonnements = [...parkingSlots].sort((a,b) => a.id - b.id);
+sortedAbonnements.forEach(slot => {
+if (slot.start && slot.end) {
+const days = Math.ceil(Math.abs(new Date(slot.end) - new Date(slot.start)) / (1000 * 60 * 60 * 24));
+if (days > 10) {
+const tr = document.createElement('tr');
+tr.innerHTML = <td><strong>Место ${slot.id}</strong></td><td>${slot.lastName || '—'}</td><td>${slot.carBrand || '—'}</td><td>${slot.carNumber || '—'}</td><td>${slot.phone || '—'}</td><td>с ${formatDate(slot.start)} по ${formatDate(slot.end)} (${days} дн.)</td>;
+tbody.appendChild(tr);
 }
-
+}
+});
+}
 function updateCounters() {
-    let f = 0, b = 0, r = 0;
-    parkingSlots.forEach(s => { if(s.status === 'free') f++; if(s.status === 'busy') b++; if(s.status === 'reserved') r++; });
-    
-    const elF = document.getElementById('free-count');
-    const elB = document.getElementById('busy-count');
-    const elR = document.getElementById('reserved-count');
-    
-    if(elF) elF.innerText = f; 
-    if(elB) elB.innerText = b; 
-    if(elR) elR.innerText = r;
+let f = 0, b = 0, r = 0;
+parkingSlots.forEach(s => { if(s.status === 'free') f++; if(s.status === 'busy') b++; if(s.status === 'reserved') r++; });
+const elF = document.getElementById('free-count');
+const elB = document.getElementById('busy-count');
+const elR = document.getElementById('reserved-count');
+if(elF) elF.innerText = f;
+if(elB) elB.innerText = b;
+if(elR) elR.innerText = r;
 }
-
 function getLineName(l) { return l === 'B'?'Б':l === 'V'?'В':l === 'G'?'Г':'Д'; }
+// ИСПРАВЛЕННАЯ ФУНКЦИЯ ДАТЫ: Никаких повторений чисел
 function formatDate(dateStr) {
-    if (!dateStr) return '';
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return dateStr;
-    return `${parts}.${parts}.${parts}`;
+if (!dateStr) return '';
+const parts = dateStr.split('-');
+if (parts.length !== 3) return dateStr;
+return ${parts[2]}.${parts[1]}.${parts[0]}; // Строго ДД.ММ.ГГГГ
 }
-
 initSystem();
-
-
-
-
-
-
