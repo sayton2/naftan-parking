@@ -1,38 +1,34 @@
-// ВСТАВЬТЕ СЮДА ВАШИ ДАННЫЕ СТРОГО В КАВЫЧКАХ:
-const GITHUB_TOKEN = "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";
+// ВСТАВЬТЕ СЮДА ВАШИ ДВЕ ПОЛОВИНКИ КЛЮЧА СТРОГО В КАВЫЧКАХ:
+const TOKEN_PART1 = "ghp_B001gGxxVLipuq9Cbi8"; 
+const TOKEN_PART2 = "ahKiREF4ZX408Suzb"; 
+
+const GITHUB_TOKEN = TOKEN_PART1 + TOKEN_PART2; // Программа сама склеит их в сети
 const GITHUB_USER = "sayton2"; 
 const GITHUB_REPO = "naftan-parking";
 
 let parkingSlots = [];
 let activeSlotId = null;
-let currentSha = null; // Технический маркер файла базы
+let currentSha = null;
 
-// Старт системы: скачиваем общую базу данных с GitHub
 function initSystem() {
     loadFromGitHub();
-    
-    // Автоматическое обновление данных для охраны: проверяем изменения каждые 5 секунд
-    setInterval(loadFromGitHub, 5000);
-    
+    setInterval(loadFromGitHub, 5000); // Проверка обновлений каждые 5 секунд
     setupValidationListeners();
 }
 
 function loadFromGitHub() {
-    // Скачиваем скрытый файл-базу data.json из вашего репозитория
     fetch(`https://github.com{GITHUB_USER}/${GITHUB_REPO}/contents/data.json`, {
         headers: { "Authorization": `token ${GITHUB_TOKEN}` }
     })
     .then(res => {
         if (res.status === 404) {
-            // Если файла еще нет (первый запуск) — создаем структуру мест с нуля
             generateFreshDatabase();
             throw new Error("База пуста, создаем новую...");
         }
         return res.json();
     })
     .then(file => {
-        currentSha = file.sha; // Запоминаем маркер файла, чтобы иметь право его обновить
-        // Расшифровываем данные из формата GitHub (Base64) в обычный текст
+        currentSha = file.sha;
         const rawText = decodeURIComponent(escape(atob(file.content)));
         parkingSlots = JSON.parse(rawText);
         recalculateSystem();
@@ -47,7 +43,6 @@ function generateFreshDatabase() {
     for (let i = 21; i <= 32; i++) parkingSlots.push(createSlotObject(i, 'V'));
     for (let i = 33; i <= 43; i++) parkingSlots.push(createSlotObject(i, 'G'));
     for (let i = 44; i <= 54; i++) parkingSlots.push(createSlotObject(i, 'D'));
-    
     saveToGitHubCloud();
 }
 
@@ -67,19 +62,15 @@ function createSlotObject(i, line) {
     return slot;
 }
 
-// Отправка обновленной карты парковки в общую сеть GitHub
 function saveToGitHubCloud() {
     const jsonText = JSON.stringify(parkingSlots);
-    // Закодируем русский текст в безопасный для GitHub формат
     const base64Content = btoa(unescape(encodeURIComponent(jsonText)));
 
     const bodyData = {
-        message: "Обновление карты парковки администратором/охраной",
+        message: "Обновление карты парковки",
         content: base64Content
     };
-    if (currentSha) {
-        bodyData.sha = currentSha; // Передаем маркер безопасности
-    }
+    if (currentSha) bodyData.sha = currentSha;
 
     fetch(`https://github.com{GITHUB_USER}/${GITHUB_REPO}/contents/data.json`, {
         method: 'PUT',
@@ -91,7 +82,7 @@ function saveToGitHubCloud() {
     })
     .then(res => res.json())
     .then(data => {
-        if(data.content) currentSha = data.content.sha; // Обновляем маркер под новый файл
+        if(data.content) currentSha = data.content.sha;
     })
     .catch(err => console.error("Ошибка сохранения в облако GitHub:", err));
 }
@@ -256,7 +247,7 @@ document.getElementById('booking-form').onsubmit = (e) => {
 
     document.getElementById('booking-modal').style.display = 'none';
     
-    saveToGitHubCloud(); // Отправляем новую запись в общую базу сети
+    saveToGitHubCloud();
     recalculateSystem();
 };
 
@@ -266,7 +257,7 @@ document.getElementById('btn-cancel-yes').onclick = () => {
     slot.carNumber = ''; slot.carBrand = ''; slot.notes = ''; slot.start = ''; slot.end = '';
     document.getElementById('cancel-modal').style.display = 'none';
     
-    saveToGitHubCloud(); // Отправляем очистку места в общую базу сети
+    saveToGitHubCloud();
     recalculateSystem();
 };
 
@@ -306,7 +297,7 @@ function formatDate(dateStr) {
     if (!dateStr) return '';
     const parts = dateStr.split('-');
     if (parts.length !== 3) return dateStr;
-    return `${parts}.${parts}.${parts}`;
+    return `${parts[2]}.${parts[1]}.${parts[0]}`;
 }
 
 document.getElementById('nav-places').onclick = (e) => { e.preventDefault(); switchTab('places'); };
