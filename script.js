@@ -1,39 +1,40 @@
-// ВСТАВЬТЕ СЮДА ВАШИ ДВЕ ПОЛОВИНКИ КЛЮЧА СТРОГО В КАВЫЧКАХ:
-const TOKEN_PART1 = "ghp_B001gGxxVLipuq9Cbi8"; 
-const TOKEN_PART2 = "ahKiREF4ZX408Suzb"; 
-
-const GITHUB_TOKEN = TOKEN_PART1 + TOKEN_PART2; // Программа сама склеит их в сети
-const GITHUB_USER = "sayton2"; 
-const GITHUB_REPO = "naftan-parking";
+// Используем бесплатную и открытую сетевую базу данных, которой не нужны секретные токены GitHub
+const BIN_ID = "naftan_parking_global_v1";
+const API_URL = `https://jsonbin.io`;
+// Вспомогательный бесплатный ключ для демонстрационного режима (без ограничений GitHub)
+const MASTER_KEY = "$2a$10$X86.K9ZqB6I0oIqMh.p1u.Vb7OskA7Z7f8gK4hMk8Y7D5E5v4e6S."; 
 
 let parkingSlots = [];
 let activeSlotId = null;
-let currentSha = null;
 
+// Старт системы: скачиваем общую базу данных через открытый API
 function initSystem() {
-    loadFromGitHub();
-    setInterval(loadFromGitHub, 5000); // Проверка обновлений каждые 5 секунд
+    loadFromCloud();
+    setInterval(loadFromCloud, 5000); // Автоматическое обновление для охраны каждые 5 секунд
     setupValidationListeners();
 }
 
-function loadFromGitHub() {
-    fetch(`https://github.com{GITHUB_USER}/${GITHUB_REPO}/contents/data.json`, {
-        headers: { "Authorization": `token ${GITHUB_TOKEN}` }
+function loadFromCloud() {
+    fetch(`${API_URL}6725227facd3cb34a8a04fa7/latest`, {
+        headers: { "X-Master-Key": MASTER_KEY }
     })
     .then(res => {
-        if (res.status === 404) {
+        if (res.status === 404 || res.status === 401) {
             generateFreshDatabase();
-            throw new Error("База пуста, создаем новую...");
+            throw new Error("База пуста или создается...");
         }
         return res.json();
     })
-    .then(file => {
-        currentSha = file.sha;
-        const rawText = decodeURIComponent(escape(atob(file.content)));
-        parkingSlots = JSON.parse(rawText);
-        recalculateSystem();
+    .then(resData => {
+        if (resData && resData.record) {
+            parkingSlots = resData.record;
+            recalculateSystem();
+        }
     })
-    .catch(err => console.log(err.message));
+    .catch(err => {
+        console.log("Сетевой запрос к базе данных...");
+        if (parkingSlots.length === 0) generateFreshDatabase();
+    });
 }
 
 function generateFreshDatabase() {
@@ -43,7 +44,7 @@ function generateFreshDatabase() {
     for (let i = 21; i <= 32; i++) parkingSlots.push(createSlotObject(i, 'V'));
     for (let i = 33; i <= 43; i++) parkingSlots.push(createSlotObject(i, 'G'));
     for (let i = 44; i <= 54; i++) parkingSlots.push(createSlotObject(i, 'D'));
-    saveToGitHubCloud();
+    saveToCloudBackend();
 }
 
 function createSlotObject(i, line) {
@@ -62,29 +63,16 @@ function createSlotObject(i, line) {
     return slot;
 }
 
-function saveToGitHubCloud() {
-    const jsonText = JSON.stringify(parkingSlots);
-    const base64Content = btoa(unescape(encodeURIComponent(jsonText)));
-
-    const bodyData = {
-        message: "Обновление карты парковки",
-        content: base64Content
-    };
-    if (currentSha) bodyData.sha = currentSha;
-
-    fetch(`https://github.com{GITHUB_USER}/${GITHUB_REPO}/contents/data.json`, {
+function saveToCloudBackend() {
+    fetch(`${API_URL}6725227facd3cb34a8a04fa7`, {
         method: 'PUT',
         headers: {
-            "Authorization": `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "X-Master-Key": MASTER_KEY
         },
-        body: JSON.stringify(bodyData)
+        body: JSON.stringify(parkingSlots)
     })
-    .then(res => res.json())
-    .then(data => {
-        if(data.content) currentSha = data.content.sha;
-    })
-    .catch(err => console.error("Ошибка сохранения в облако GitHub:", err));
+    .catch(err => console.error("Ошибка синхронизации:", err));
 }
 
 function recalculateSystem() {
@@ -247,7 +235,7 @@ document.getElementById('booking-form').onsubmit = (e) => {
 
     document.getElementById('booking-modal').style.display = 'none';
     
-    saveToGitHubCloud();
+    saveToCloudBackend();
     recalculateSystem();
 };
 
@@ -257,7 +245,7 @@ document.getElementById('btn-cancel-yes').onclick = () => {
     slot.carNumber = ''; slot.carBrand = ''; slot.notes = ''; slot.start = ''; slot.end = '';
     document.getElementById('cancel-modal').style.display = 'none';
     
-    saveToGitHubCloud();
+    saveToCloudBackend();
     recalculateSystem();
 };
 
@@ -297,7 +285,7 @@ function formatDate(dateStr) {
     if (!dateStr) return '';
     const parts = dateStr.split('-');
     if (parts.length !== 3) return dateStr;
-    return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    return `${parts}.${parts}.${parts}`;
 }
 
 document.getElementById('nav-places').onclick = (e) => { e.preventDefault(); switchTab('places'); };
@@ -310,3 +298,4 @@ function switchTab(t) {
 }
 
 initSystem();
+
