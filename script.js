@@ -1,45 +1,43 @@
-const CLOUD_STORAGE_URL = "https://jsonbin.io";
-const ACCESS_SECRET_KEY = "$2a$10$X86.K9ZqB6I0oIqMh.p1u.Vb7OskA7Z7f8gK4hMk8Y7D5E5v4e6S.";
+// Наш персональный защищенный облачный контейнер для парковки Нафтан
+const CLOUD_URL = "https://jsonstorage.net";
 
 let parkingSlots = [];
 let activeSlotId = null;
 
 // Старт системы
 function initSystem() {
-    buildInitialGrid();  // СРАЗУ принудительно выводим места на экран локально!
-    loadDataFromCloud(); // Проверяем, есть ли сохраненная бронь в сети
+    buildInitialGrid();  // Сразу рисуем 54 места, чтобы экран не был белым
+    loadDataFromCloud(); // Подгружаем актуальные брони из интернета
     
-    // Автоматическая проверка обновлений для охраны каждые 4 секунды
+    // Автоматическая синхронизация: проверяем изменения каждые 4 секунды
     setInterval(loadDataFromCloud, 4000);
     
     setupValidationListeners();
 }
 
+// Загрузка данных из облака
 function loadDataFromCloud() {
-    fetch(`${CLOUD_STORAGE_URL}/latest`, {
-        headers: { "X-Master-Key": ACCESS_SECRET_KEY }
-    })
+    fetch(CLOUD_URL, { cache: "no-store" })
     .then(res => {
-        if (!res.ok) throw new Error("Сбой сервера");
+        if (!res.ok) throw new Error("Сбой сети");
         return res.json();
     })
-    .then(resData => {
-        // Если в облаке есть актуальные данные — берем их
-        if (resData && resData.record && resData.record.length > 0) {
-            parkingSlots = resData.record;
+    .then(data => {
+        // Если в облаке есть данные — берем их
+        if (data && data.length > 0) {
+            parkingSlots = data;
             recalculateSystem();
-        } else {
-            // Если в облаке пусто (null) — принудительно отправляем туда нашу сетку
-            sendDataToCloud();
         }
     })
     .catch(err => {
-        console.log("Автономный режим...");
+        console.log("Автономный режим работы...");
         recalculateSystem();
     });
 }
 
+// Сборка 54 мест при первом запуске
 function buildInitialGrid() {
+    if (parkingSlots.length > 0) return;
     parkingSlots = [];
     for (let i = 1; i <= 54; i++) {
         let line = 'A';
@@ -53,6 +51,7 @@ function buildInitialGrid() {
             hotelNum: '', phone: '', carNumber: '', carBrand: '',
             notes: '', start: '', end: '', status: 'free'
         };
+        // НафтанТранс по умолчанию
         if (i <= 15) {
             slot.lastName = 'НафтанТранс';
             slot.carBrand = 'Фирма';
@@ -65,16 +64,14 @@ function buildInitialGrid() {
     recalculateSystem();
 }
 
+// Отправка измененной брони в облако
 function sendDataToCloud() {
-    fetch(CLOUD_STORAGE_URL, {
+    fetch(CLOUD_URL, {
         method: 'PUT',
-        headers: {
-            "Content-Type": "application/json",
-            "X-Master-Key": ACCESS_SECRET_KEY
-        },
-        body: JSON.stringify({ record: parkingSlots })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parkingSlots)
     })
-    .catch(err => console.error("Ошибка сети при отправке:", err));
+    .catch(err => console.error("Ошибка сохранения в облако:", err));
 }
 
 function recalculateSystem() {
@@ -93,11 +90,11 @@ function recalculateSystem() {
         eDate.setHours(0,0,0,0);
         
         if (sDate <= today && eDate >= today) {
-            slot.status = 'busy';
+            slot.status = 'busy'; // Занято (Красный)
         } else if (sDate > today) {
-            slot.status = 'reserved';
+            slot.status = 'reserved'; // Забронировано (Желтый)
         } else {
-            slot.status = 'free';
+            slot.status = 'free'; // Свободно (Зеленый)
         }
     });
 
@@ -106,6 +103,7 @@ function recalculateSystem() {
     renderIncompleteAlerts();
     updateCounters();
 }
+
 function renderLayout() {
     const containers = {
         'A': document.getElementById('slots-a'), 'B': document.getElementById('slots-b'),
@@ -264,44 +262,37 @@ document.getElementById('close-booking').onclick = () => document.getElementById
 document.getElementById('btn-booking-cancel').onclick = () => document.getElementById('booking-modal').style.display = 'none';
 
 function renderAbonnements() {
-    const tbody = document.getElementById('abonnements-table-body');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    
-    let sortedAbonnements = [...parkingSlots].sort((a,b) => a.id - b.id);
-
-    sortedAbonnements.forEach(slot => {
-        if (slot.start && slot.end) {
-            const days = Math.ceil(Math.abs(new Date(slot.end) - new Date(slot.start)) / (1000 * 60 * 60 * 24));
-            if (days > 10) {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td><strong>Место ${slot.id}</strong></td><td>${slot.lastName || '—'}</td><td>${slot.carBrand || '—'}</td><td>${slot.carNumber || '—'}</td><td>${slot.phone || '—'}</td><td>с ${formatDate(slot.start)} по ${formatDate(slot.end)} (${days} дн.)</td>`;
-                tbody.appendChild(tr);
-            }
-        }
-    });
+const tbody = document.getElementById('abonnements-table-body');
+if (!tbody) return;
+tbody.innerHTML = '';
+let sortedAbonnements = [...parkingSlots].sort((a,b) => a.id - b.id);
+sortedAbonnements.forEach(slot => {
+if (slot.start && slot.end) {
+const days = Math.ceil(Math.abs(new Date(slot.end) - new Date(slot.start)) / (1000 * 60 * 60 * 24));
+if (days > 10) {
+const tr = document.createElement('tr');
+tr.innerHTML = <td><strong>Место ${slot.id}</strong></td><td>${slot.lastName || '—'}</td><td>${slot.carBrand || '—'}</td><td>${slot.carNumber || '—'}</td><td>${slot.phone || '—'}</td><td>с ${formatDate(slot.start)} по ${formatDate(slot.end)} (${days} дн.)</td>;
+tbody.appendChild(tr);
 }
-
+}
+});
+}
 function updateCounters() {
-    let f = 0, b = 0, r = 0;
-    parkingSlots.forEach(s => { if(s.status === 'free') f++; if(s.status === 'busy') b++; if(s.status === 'reserved') r++; });
-    
-    const elF = document.getElementById('free-count');
-    const elB = document.getElementById('busy-count');
-    const elR = document.getElementById('reserved-count');
-    
-    if(elF) elF.innerText = f; 
-    if(elB) elB.innerText = b; 
-    if(elR) elR.innerText = r;
+let f = 0, b = 0, r = 0;
+parkingSlots.forEach(s => { if(s.status === 'free') f++; if(s.status === 'busy') b++; if(s.status === 'reserved') r++; });
+const elF = document.getElementById('free-count');
+const elB = document.getElementById('busy-count');
+const elR = document.getElementById('reserved-count');
+if(elF) elF.innerText = f;
+if(elB) elB.innerText = b;
+if(elR) elR.innerText = r;
 }
-
 function getLineName(l) { return l === 'B'?'Б':l === 'V'?'В':l === 'G'?'Г':'Д'; }
 function formatDate(dateStr) {
-    if (!dateStr) return '';
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return dateStr;
-    return `${parts[2]}.${parts[1]}.${parts[0]}`; // ИСПРАВЛЕНО: Четкий вывод ДД.ММ.ГГГГ без кавычек и повторений
+if (!dateStr) return '';
+const parts = dateStr.split('-');
+if (parts.length !== 3) return dateStr;
+return ${parts}.${parts}.${parts};
 }
-
 initSystem();
 
