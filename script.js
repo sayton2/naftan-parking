@@ -1,4 +1,4 @@
-// ИСПРАВЛЕНО: Уникальный постоянный онлайн-контейнер стоянки Нафтан в облаке
+// Выделенный постоянный онлайн-контейнер стоянки Нафтан в облачной сети JsonStorage
 const CLOUD_URL = "https://jsonstorage.net";
 
 let parkingSlots = [];
@@ -68,7 +68,7 @@ function buildInitialGrid() {
     recalculateSystem();
 }
 
-// Отправка измененной брони в облако
+// Отправка измененной брони в облако (Используем метод PUT по спецификации API)
 function sendDataToCloud() {
     fetch(CLOUD_URL, {
         method: 'PUT',
@@ -107,6 +107,7 @@ function recalculateSystem() {
     renderIncompleteAlerts();
     updateCounters();
 }
+
 function renderLayout() {
     const containers = {
         'A': document.getElementById('slots-a'), 'B': document.getElementById('slots-b'),
@@ -136,7 +137,6 @@ function renderLayout() {
         }
     });
 }
-
 function handleSlotClick(id) {
     const slot = parkingSlots.find(s => s.id === id);
     activeSlotId = id;
@@ -227,6 +227,7 @@ function renderIncompleteAlerts() {
     if(badge) badge.innerText = `карточек: ${count}`;
 }
 
+// Привязка отправки формы к функции обновления облака
 document.getElementById('booking-form').onsubmit = (e) => {
     e.preventDefault();
     const slot = parkingSlots.find(s => s.id === activeSlotId);
@@ -247,6 +248,7 @@ document.getElementById('booking-form').onsubmit = (e) => {
     recalculateSystem();
 };
 
+// Привязка отмены брони
 document.getElementById('btn-cancel-yes').onclick = () => {
     const slot = parkingSlots.find(s => s.id === activeSlotId);
     slot.orderNum = ''; slot.lastName = ''; slot.hotelNum = ''; slot.phone = '';
@@ -301,9 +303,10 @@ function formatDate(dateStr) {
     if (!dateStr) return '';
     const parts = dateStr.split('-');
     if (parts.length !== 3) return dateStr;
-    return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    return `${parts}.${parts}.${parts}`;
 }
 
 initSystem();
+
 
 
