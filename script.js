@@ -1,30 +1,27 @@
 let parkingSlots = [];
 let activeSlotId = null;
 
+// Старт системы: проверяем память устройства
 function initSystem() {
     parkingSlots = [];
     
-    // Генерируем Линию А: 1-15 (Нумерация снизу вверх)
-    for (let i = 1; i <= 15; i++) {
-        parkingSlots.push(createSlotObject(i, 'A'));
-    }
-    // Генерируем Линию Б: 16-20 (Горизонтально слева направо)
-    for (let i = 16; i <= 20; i++) {
-        parkingSlots.push(createSlotObject(i, 'B'));
-    }
-    // Генерируем Линию В: 21-32 (Вертикально сверху вниз)
-    for (let i = 21; i <= 32; i++) {
-        parkingSlots.push(createSlotObject(i, 'V'));
-    }
-    // Генерируем Линию Г: 33-43 (Вертикально сверху вниз)
-    for (let i = 33; i <= 43; i++) {
-        parkingSlots.push(createSlotObject(i, 'G'));
-    }
-    // Генерируем Линию Д: 44-54 (Вертикально сверху вниз)
-    for (let i = 44; i <= 54; i++) {
-        parkingSlots.push(createSlotObject(i, 'D'));
+    // Смотрим, есть ли уже сохраненная база на этом устройстве
+    const savedData = localStorage.getItem('naftan_parking_local_db');
+    if (savedData) {
+        parkingSlots = JSON.parse(savedData);
+        recalculateSystem();
+        setupValidationListeners();
+        return; // База успешно загружена, выходим
     }
 
+    // Если запуск самый первый и памяти нет — создаем чистые места
+    for (let i = 1; i <= 15; i++) parkingSlots.push(createSlotObject(i, 'A'));
+    for (let i = 16; i <= 20; i++) parkingSlots.push(createSlotObject(i, 'B'));
+    for (let i = 21; i <= 32; i++) parkingSlots.push(createSlotObject(i, 'V'));
+    for (let i = 33; i <= 43; i++) parkingSlots.push(createSlotObject(i, 'G'));
+    for (let i = 44; i <= 54; i++) parkingSlots.push(createSlotObject(i, 'D'));
+
+    saveToDeviceMemory(); // Фиксируем начальное состояние
     recalculateSystem();
     setupValidationListeners();
 }
@@ -35,7 +32,7 @@ function createSlotObject(i, line) {
         hotelNum: '', phone: '', carNumber: '', carBrand: '',
         notes: '', start: '', end: '', status: 'free'
     };
-    // Места 1-15 арендованы фирмой НафтанТранс
+    // Места 1-15 намертво закреплены за НафтанТранс
     if (i <= 15) {
         slot.lastName = 'НафтанТранс';
         slot.carBrand = 'Фирма';
@@ -44,6 +41,11 @@ function createSlotObject(i, line) {
         slot.end = '2027-12-01';
     }
     return slot;
+}
+
+// Функция физической записи данных в память браузера
+function saveToDeviceMemory() {
+    localStorage.setItem('naftan_parking_local_db', JSON.stringify(parkingSlots));
 }
 
 function recalculateSystem() {
@@ -55,7 +57,6 @@ function recalculateSystem() {
             slot.status = 'free';
             return;
         }
-        
         const sDate = new Date(slot.start);
         const eDate = new Date(slot.end);
         sDate.setHours(0,0,0,0);
@@ -64,9 +65,9 @@ function recalculateSystem() {
         if (sDate <= today && eDate >= today) {
             slot.status = 'busy'; // Занято (Красный)
         } else if (sDate > today) {
-            slot.status = 'reserved'; // Забронировано на будущее (Желтый)
+            slot.status = 'reserved'; // Забронировано (Желтый)
         } else {
-            slot.status = 'free'; // Свободно / Срок истек (Зеленый)
+            slot.status = 'free'; // Свободно (Зеленый)
         }
     });
 
@@ -118,7 +119,7 @@ function handleSlotClick(id) {
 }
 
 function openBookingFormDirect(slot) {
-    document.getElementById('modal-slot-info').innerText = `Место ${slot.id}, линия ${getLineName(slot.line)}. Заполните недостающие поля карточки гостя.`;
+    document.getElementById('modal-slot-info').innerText = `Место ${slot.id}, линия ${getLineName(slot.line)}. Заполните поля карточки гостя.`;
     
     document.getElementById('input-orderNum').value = slot.orderNum;
     document.getElementById('input-lastName').value = slot.lastName;
@@ -206,6 +207,8 @@ document.getElementById('booking-form').onsubmit = (e) => {
     slot.end = document.getElementById('input-end').value;
 
     document.getElementById('booking-modal').style.display = 'none';
+    
+    saveToDeviceMemory(); // <--- Сохраняем в память устройства!
     recalculateSystem();
 };
 
@@ -214,6 +217,8 @@ document.getElementById('btn-cancel-yes').onclick = () => {
     slot.orderNum = ''; slot.lastName = ''; slot.hotelNum = ''; slot.phone = '';
     slot.carNumber = ''; slot.carBrand = ''; slot.notes = ''; slot.start = ''; slot.end = '';
     document.getElementById('cancel-modal').style.display = 'none';
+    
+    saveToDeviceMemory(); // <--- Сохраняем очистку в память устройства!
     recalculateSystem();
 };
 
@@ -251,12 +256,10 @@ function updateCounters() {
 function getLineName(l) { return l === 'B'?'Б':l === 'V'?'В':l === 'G'?'Г':'Д'; }
 function formatDate(dateStr) {
     if (!dateStr) return '';
-    // Преобразуем формат ГГГГ-ММ-ДД в ДД.ММ.ГГГГ
     const parts = dateStr.split('-');
     if (parts.length !== 3) return dateStr;
-    return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    return `${parts[2]}.${parts[1]}.${parts[0]}`; // <--- Исправлен вывод даты ДД.ММ.ГГГГ!
 }
-
 
 document.getElementById('nav-places').onclick = (e) => { e.preventDefault(); switchTab('places'); };
 document.getElementById('nav-abonnements').onclick = (e) => { e.preventDefault(); switchTab('abonnements'); };
