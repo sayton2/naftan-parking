@@ -397,13 +397,12 @@ function fieldText(value) {
     return String(value ?? '').trim();
 }
 
-// Полная карточка: все поля формы, кроме примечаний. Пустые пробелы не считаются заполненными.
+// Полная карточка: основные поля. Телефон и примечания можно не заполнять.
 function isSlotCardComplete(slot) {
     return Boolean(
         fieldText(slot.orderNum) &&
         fieldText(slot.lastName) &&
         fieldText(slot.hotelNum) &&
-        fieldText(slot.phone) &&
         fieldText(slot.carNumber) &&
         fieldText(slot.carBrand) &&
         normalizeDate(slot.start) &&
