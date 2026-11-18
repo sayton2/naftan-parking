@@ -5,6 +5,7 @@ const TABLE = 'parking_spots';
 let parkingSlots = [];
 let activeSlotId = null;
 let realtimeChannel = null;
+let cloudLoadId = 0;
 
 // Старт системы
 function initSystem() {
@@ -121,17 +122,20 @@ function restoreEmptyNaftanTrans() {
 
 // Загрузка данных из Supabase
 async function loadDataFromCloud() {
+    const loadId = ++cloudLoadId;
     try {
         const { data, error } = await supabase
             .from(TABLE)
             .select('*')
             .order('id', { ascending: true });
 
+        if (loadId !== cloudLoadId) return;
         if (error) throw error;
 
         if (!data || data.length === 0) {
             // Таблица пуста — отправляем стартовую сетку (после запуска schema.sql обычно уже есть 54 строки)
             await sendDataToCloud();
+            if (loadId !== cloudLoadId) return;
             // Keep the local 54-spot grid already built by buildInitialGrid.
             recalculateSystem();
             return;
@@ -143,9 +147,11 @@ async function loadDataFromCloud() {
             const { error: restoreError } = await supabase
                 .from(TABLE)
                 .upsert(restored.map(slotToRow), { onConflict: 'id' });
+            if (loadId !== cloudLoadId) return;
             if (restoreError) console.error('Ошибка восстановления НафтанТранс:', restoreError);
         }
     } catch (err) {
+        if (loadId !== cloudLoadId) return;
         console.log('Автономный режим работы...', err?.message || err);
         recalculateSystem();
     }
@@ -331,43 +337,57 @@ function validateForm() {
     if (btn) btn.disabled = !(hasDates && hasOneRequiredField);
 }
 
+function fieldText(value) {
+    return String(value ?? '').trim();
+}
+
+// Полная карточка: все поля формы, кроме примечаний. Пустые пробелы не считаются заполненными.
+function isSlotCardComplete(slot) {
+    return Boolean(
+        fieldText(slot.orderNum) &&
+        fieldText(slot.lastName) &&
+        fieldText(slot.hotelNum) &&
+        fieldText(slot.phone) &&
+        fieldText(slot.carNumber) &&
+        fieldText(slot.carBrand) &&
+        normalizeDate(slot.start) &&
+        normalizeDate(slot.end)
+    );
+}
+
+function isIncompleteAlert(slot) {
+    if (!slot || slot.id <= 15) return false;
+    const hasBooking = Boolean(normalizeDate(slot.start) || normalizeDate(slot.end));
+    return hasBooking && !isSlotCardComplete(slot);
+}
+
 function renderIncompleteAlerts() {
     const container = document.getElementById('incomplete-slots-list');
     if (!container) return;
     container.innerHTML = '';
     let count = 0;
 
-    let sortedAlerts = [...parkingSlots].sort((a,b) => a.id - b.id);
+    [...parkingSlots].sort((a, b) => a.id - b.id).forEach(slot => {
+        if (!isIncompleteAlert(slot)) return;
 
-    sortedAlerts.forEach(slot => {
-        if (slot.id <= 15) return; 
-
-        if (slot.start || slot.end) {
-            const isFull = slot.orderNum && slot.lastName && slot.hotelNum && slot.phone && slot.carNumber && slot.carBrand && slot.start && slot.end;
-            
-            if (!isFull) {
-                count++;
-                const card = document.createElement('div');
-                card.className = 'alert-card';
-                card.innerHTML = `
-                    <div>
-                        <span class="place-name">Место ${slot.id} · Линия ${getLineName(slot.line)} · Бронь</span>
-                        <br><span class="reason">Карточка заполнена не полностью (есть пустые поля)</span>
-                    </div>
-                    <div class="dates" style="text-align:right;">${formatDate(slot.start)} — ${formatDate(slot.end)}</div>
-                `;
-                
-                card.onclick = () => {
-                    activeSlotId = slot.id;
-                    openBookingFormDirect(slot);
-                };
-                
-                container.appendChild(card);
-            }
-        }
+        count++;
+        const card = document.createElement('div');
+        card.className = 'alert-card';
+        card.innerHTML = `
+            <div>
+                <span class="place-name">Место ${slot.id} · Линия ${getLineName(slot.line)} · Бронь</span>
+                <br><span class="reason">Карточка заполнена не полностью (есть пустые поля)</span>
+            </div>
+            <div class="dates" style="text-align:right;">${formatDate(slot.start)} — ${formatDate(slot.end)}</div>
+        `;
+        card.onclick = () => {
+            activeSlotId = slot.id;
+            openBookingFormDirect(slot);
+        };
+        container.appendChild(card);
     });
     const badge = document.getElementById('alert-badge-count');
-    if(badge) badge.innerText = `карточек: ${count}`;
+    if (badge) badge.innerText = `карточек: ${count}`;
 }
 
 // Привязка отправки формы к функции обновления облака
@@ -387,9 +407,12 @@ document.getElementById('booking-form').onsubmit = async (e) => {
     slot.end = normalizeDate(document.getElementById('input-end').value);
 
     document.getElementById('booking-modal').style.display = 'none';
-    
-    await updateSpotInCloud(slot);
+
+    // Сразу убрать полную карточку из нижнего списка, не дожидаясь ответа Supabase.
+    // Старый ответ загрузки не должен вернуть её обратно.
+    cloudLoadId++;
     recalculateSystem();
+    await updateSpotInCloud(slot);
 };
 
 // Привязка отмены брони
@@ -398,9 +421,10 @@ document.getElementById('btn-cancel-yes').onclick = async () => {
     slot.orderNum = ''; slot.lastName = ''; slot.hotelNum = ''; slot.phone = '';
     slot.carNumber = ''; slot.carBrand = ''; slot.notes = ''; slot.start = ''; slot.end = '';
     document.getElementById('cancel-modal').style.display = 'none';
-    
-    await updateSpotInCloud(slot);
+
+    cloudLoadId++;
     recalculateSystem();
+    await updateSpotInCloud(slot);
 };
 
 document.getElementById('btn-cancel-no').onclick = () => {
@@ -410,23 +434,59 @@ document.getElementById('btn-cancel-no').onclick = () => {
 document.getElementById('close-booking').onclick = () => document.getElementById('booking-modal').style.display = 'none';
 document.getElementById('btn-booking-cancel').onclick = () => document.getElementById('booking-modal').style.display = 'none';
 
+function parkingDays(start, end) {
+    const startDate = normalizeDate(start);
+    const endDate = normalizeDate(end);
+    if (!startDate || !endDate) return 0;
+    const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+    const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+    const utcStart = Date.UTC(startYear, startMonth - 1, startDay);
+    const utcEnd = Date.UTC(endYear, endMonth - 1, endDay);
+    return Math.round((utcEnd - utcStart) / 86400000);
+}
+
+function formatDuration(days) {
+    const months = Math.floor(days / 30);
+    const rest = days % 30;
+    if (months <= 0) return `${days} дн.`;
+    if (rest === 0) return `${months} мес. (${days} дн.)`;
+    return `${months} мес. ${rest} дн. (${days} дн.)`;
+}
+
 function renderAbonnements() {
     const tbody = document.getElementById('abonnements-table-body');
     if (!tbody) return;
     tbody.innerHTML = '';
-    
-    let sortedAbonnements = [...parkingSlots].sort((a,b) => a.id - b.id);
 
-    sortedAbonnements.forEach(slot => {
-        if (slot.start && slot.end) {
-            const days = Math.ceil(Math.abs(new Date(slot.end) - new Date(slot.start)) / (1000 * 60 * 60 * 24));
-            if (days > 10) {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td><strong>Место ${slot.id}</strong></td><td>${slot.lastName || '—'}</td><td>${slot.carBrand || '—'}</td><td>${slot.carNumber || '—'}</td><td>${slot.phone || '—'}</td><td>с ${formatDate(slot.start)} по ${formatDate(slot.end)} (${days} дн.)</td>`;
-                tbody.appendChild(tr);
-            }
-        }
+    const rows = parkingSlots
+        .filter(slot => slot.status === 'busy' || slot.status === 'reserved')
+        .map(slot => ({ slot, days: parkingDays(slot.start, slot.end) }))
+        .filter(row => row.days >= 30)
+        .sort((a, b) => a.days - b.days || a.slot.id - b.slot.id);
+
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5">Нет занятых мест со сроком от 30 дней</td></tr>';
+        return;
+    }
+
+    rows.forEach(({ slot, days }) => {
+        const car = [fieldText(slot.carBrand), fieldText(slot.carNumber)].filter(Boolean).join(', ') || '—';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><strong>Место ${slot.id}</strong></td><td>${fieldText(slot.lastName) || '—'}</td><td>${car}</td><td>${fieldText(slot.phone) || '—'}</td><td>${formatDuration(days)}</td>`;
+        tbody.appendChild(tr);
     });
+}
+
+document.getElementById('nav-places').onclick = (e) => { e.preventDefault(); switchTab('places'); };
+document.getElementById('nav-abonnements').onclick = (e) => { e.preventDefault(); switchTab('abonnements'); };
+
+function switchTab(tab) {
+    const showPlaces = tab === 'places';
+    document.getElementById('nav-places').classList.toggle('active', showPlaces);
+    document.getElementById('nav-abonnements').classList.toggle('active', !showPlaces);
+    document.getElementById('section-places-content').style.display = showPlaces ? 'block' : 'none';
+    document.getElementById('section-abonnements-content').style.display = showPlaces ? 'none' : 'block';
+    if (!showPlaces) renderAbonnements();
 }
 
 function updateCounters() {
