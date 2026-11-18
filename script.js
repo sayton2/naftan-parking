@@ -22,6 +22,35 @@ function lineForId(i) {
     return 'A';
 }
 
+// Постоянная аренда линии А (места 1–15) до миграции на Supabase.
+const NAFTAN_TRANS = {
+    lastName: 'НафтанТранс',
+    carBrand: 'Фирма',
+    carNumber: 'ООО',
+    start: '2026-11-01',
+    end: '2027-12-01'
+};
+
+function applyNaftanTransDefaults(slot) {
+    slot.lastName = NAFTAN_TRANS.lastName;
+    slot.carBrand = NAFTAN_TRANS.carBrand;
+    slot.carNumber = NAFTAN_TRANS.carNumber;
+    slot.start = NAFTAN_TRANS.start;
+    slot.end = NAFTAN_TRANS.end;
+}
+
+function isUntouchedSpot(slot) {
+    return !slot.start && !slot.end && !slot.lastName && !slot.orderNum
+        && !slot.hotelNum && !slot.phone && !slot.carNumber && !slot.carBrand && !slot.notes;
+}
+
+// <input type="date"> принимает только ГГГГ-ММ-ДД. Из Supabase иногда приходит ISO-строка.
+function normalizeDate(value) {
+    if (value == null || value === '') return '';
+    const match = String(value).trim().match(/^(\d{4}-\d{2}-\d{2})/);
+    return match ? match[1] : '';
+}
+
 // Map accepts Latin A/B/V/G/D or Cyrillic А/Б/В/Г/Д (visually identical in UI labels).
 const LINE_NORMALIZE = {
     A: 'A', B: 'B', V: 'V', G: 'G', D: 'D',
@@ -48,8 +77,8 @@ function rowToSlot(row) {
         carNumber: row.car_number || '',
         carBrand: row.car_brand || '',
         notes: row.notes || '',
-        start: row.start_date || '',
-        end: row.end_date || '',
+        start: normalizeDate(row.start_date),
+        end: normalizeDate(row.end_date),
         status: 'free'
     };
 }
@@ -75,7 +104,19 @@ function applySlotsFromRows(rows) {
         .map(rowToSlot)
         .filter(slot => Number.isFinite(slot.id) && slot.id >= 1 && slot.id <= 54)
         .sort((a, b) => a.id - b.id);
-    recalculateSystem();
+    return restoreEmptyNaftanTrans();
+}
+
+// Пустые места 1–15 (сид с on conflict do nothing их не заполнил) возвращаем к аренде НафтанТранс.
+function restoreEmptyNaftanTrans() {
+    const restored = [];
+    parkingSlots.forEach(slot => {
+        if (slot.id >= 1 && slot.id <= 15 && isUntouchedSpot(slot)) {
+            applyNaftanTransDefaults(slot);
+            restored.push(slot);
+        }
+    });
+    return restored;
 }
 
 // Загрузка данных из Supabase
@@ -96,7 +137,14 @@ async function loadDataFromCloud() {
             return;
         }
 
-        applySlotsFromRows(data);
+        const restored = applySlotsFromRows(data);
+        recalculateSystem();
+        if (restored.length) {
+            const { error: restoreError } = await supabase
+                .from(TABLE)
+                .upsert(restored.map(slotToRow), { onConflict: 'id' });
+            if (restoreError) console.error('Ошибка восстановления НафтанТранс:', restoreError);
+        }
     } catch (err) {
         console.log('Автономный режим работы...', err?.message || err);
         recalculateSystem();
@@ -138,13 +186,7 @@ function buildInitialGrid() {
             notes: '', start: '', end: '', status: 'free'
         };
         // НафтанТранс по умолчанию
-        if (i <= 15) {
-            slot.lastName = 'НафтанТранс';
-            slot.carBrand = 'Фирма';
-            slot.carNumber = 'ООО';
-            slot.start = '2026-11-01';
-            slot.end = '2027-12-01';
-        }
+        if (i <= 15) applyNaftanTransDefaults(slot);
         parkingSlots.push(slot);
     }
     recalculateSystem();
@@ -258,33 +300,35 @@ function openBookingFormDirect(slot) {
     document.getElementById('input-carNumber').value = slot.carNumber || '';
     document.getElementById('input-carBrand').value = slot.carBrand || '';
     document.getElementById('input-notes').value = slot.notes || '';
-    document.getElementById('input-start').value = slot.start || '';
-    document.getElementById('input-end').value = slot.end || '';
+    document.getElementById('input-start').value = normalizeDate(slot.start);
+    document.getElementById('input-end').value = normalizeDate(slot.end);
     
     validateForm();
     document.getElementById('booking-modal').style.display = 'block';
 }
 
 function setupValidationListeners() {
-    const inputs = ['input-orderNum', 'input-lastName', 'input-hotelNum', 'input-start', 'input-end'];
-    inputs.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener('input', validateForm);
-    });
+    // Кнопка в HTML disabled, пока нет обеих дат и одного из полей: заказ / фамилия / отель.
+    // Календарь type="date" часто шлёт только change, поэтому одного input недостаточно —
+    // иначе «Забронировать» так и остаётся неактивной.
+    const form = document.getElementById('booking-form');
+    if (!form) return;
+    form.addEventListener('input', validateForm);
+    form.addEventListener('change', validateForm);
 }
 
 function validateForm() {
-    const orderNum = document.getElementById('input-orderNum').value.trim();
-    const lastName = document.getElementById('input-lastName').value.trim();
-    const hotelNum = document.getElementById('input-hotelNum').value.trim();
-    const start = document.getElementById('input-start').value;
-    const end = document.getElementById('input-end').value;
+    const orderNum = document.getElementById('input-orderNum')?.value.trim() || '';
+    const lastName = document.getElementById('input-lastName')?.value.trim() || '';
+    const hotelNum = document.getElementById('input-hotelNum')?.value.trim() || '';
+    const start = normalizeDate(document.getElementById('input-start')?.value);
+    const end = normalizeDate(document.getElementById('input-end')?.value);
 
     const hasDates = start !== '' && end !== '';
     const hasOneRequiredField = orderNum !== '' || lastName !== '' || hotelNum !== '';
 
     const btn = document.getElementById('btn-submit-booking');
-    if(btn) btn.disabled = !(hasDates && hasOneRequiredField);
+    if (btn) btn.disabled = !(hasDates && hasOneRequiredField);
 }
 
 function renderIncompleteAlerts() {
@@ -330,6 +374,7 @@ function renderIncompleteAlerts() {
 document.getElementById('booking-form').onsubmit = async (e) => {
     e.preventDefault();
     const slot = parkingSlots.find(s => s.id === activeSlotId);
+    if (!slot) return;
 
     slot.orderNum = document.getElementById('input-orderNum').value.trim();
     slot.lastName = document.getElementById('input-lastName').value.trim();
@@ -338,8 +383,8 @@ document.getElementById('booking-form').onsubmit = async (e) => {
     slot.carNumber = document.getElementById('input-carNumber').value.trim();
     slot.carBrand = document.getElementById('input-carBrand').value.trim();
     slot.notes = document.getElementById('input-notes').value.trim();
-    slot.start = document.getElementById('input-start').value;
-    slot.end = document.getElementById('input-end').value;
+    slot.start = normalizeDate(document.getElementById('input-start').value);
+    slot.end = normalizeDate(document.getElementById('input-end').value);
 
     document.getElementById('booking-modal').style.display = 'none';
     
@@ -406,10 +451,10 @@ function getLineName(l) {
     return 'Д';
 }
 function formatDate(dateStr) {
-    if (!dateStr) return '';
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return dateStr;
-    return `${parts}.${parts}.${parts}`;
+    const normalized = normalizeDate(dateStr);
+    if (!normalized) return '';
+    const parts = normalized.split('-');
+    return `${parts[2]}.${parts[1]}.${parts[0]}`;
 }
 
 initSystem();
