@@ -12,7 +12,65 @@ function initSystem() {
     buildInitialGrid();  // Сразу рисуем 54 места, чтобы экран не был белым
     loadDataFromCloud(); // Подгружаем актуальные брони из Supabase
     subscribeToRealtime();
+    setupDatePickers();
     setupValidationListeners();
+}
+
+function bookingDateOptions() {
+    return {
+        disableMobile: true,
+        locale: "ru",
+        dateFormat: "Y-m-d",
+        allowInput: false,
+        appendTo: document.body,
+        onChange() { validateForm(); }
+    };
+}
+
+function setupDatePickers() {
+    const createPicker = globalThis.flatpickr;
+    if (typeof createPicker !== "function") {
+        console.error("Flatpickr не загружен");
+        ["input-start", "input-end"].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) input.readOnly = false;
+        });
+        return;
+    }
+    ["input-start", "input-end"].forEach(id => {
+        const input = document.getElementById(id);
+        if (!input || input._flatpickr) return;
+        createPicker(input, bookingDateOptions());
+    });
+}
+
+function setPickerDate(id, value) {
+    const input = document.getElementById(id);
+    if (!input) return;
+    const iso = normalizeDate(value);
+    const picker = input._flatpickr;
+    if (!picker) {
+        input.value = iso;
+        return;
+    }
+    if (!iso) picker.clear(false);
+    else picker.setDate(iso, false, "Y-m-d");
+}
+
+function readPickerDate(id) {
+    const input = document.getElementById(id);
+    if (!input) return "";
+    const picker = input._flatpickr;
+    if (picker?.selectedDates?.length) {
+        return picker.formatDate(picker.selectedDates[0], "Y-m-d");
+    }
+    return normalizeDate(input.value);
+}
+
+function closeDatePickers() {
+    ["input-start", "input-end"].forEach(id => {
+        document.getElementById(id)?._flatpickr?.close();
+    });
 }
 
 function lineForId(i) {
@@ -306,8 +364,8 @@ function openBookingFormDirect(slot) {
     document.getElementById('input-carNumber').value = slot.carNumber || '';
     document.getElementById('input-carBrand').value = slot.carBrand || '';
     document.getElementById('input-notes').value = slot.notes || '';
-    document.getElementById('input-start').value = normalizeDate(slot.start);
-    document.getElementById('input-end').value = normalizeDate(slot.end);
+    setPickerDate('input-start', slot.start);
+    setPickerDate('input-end', slot.end);
     
     validateForm();
     document.getElementById('booking-modal').style.display = 'block';
@@ -315,8 +373,6 @@ function openBookingFormDirect(slot) {
 
 function setupValidationListeners() {
     // Кнопка в HTML disabled, пока нет обеих дат и одного из полей: заказ / фамилия / отель.
-    // Календарь type="date" часто шлёт только change, поэтому одного input недостаточно —
-    // иначе «Забронировать» так и остаётся неактивной.
     const form = document.getElementById('booking-form');
     if (!form) return;
     form.addEventListener('input', validateForm);
@@ -327,8 +383,8 @@ function validateForm() {
     const orderNum = document.getElementById('input-orderNum')?.value.trim() || '';
     const lastName = document.getElementById('input-lastName')?.value.trim() || '';
     const hotelNum = document.getElementById('input-hotelNum')?.value.trim() || '';
-    const start = normalizeDate(document.getElementById('input-start')?.value);
-    const end = normalizeDate(document.getElementById('input-end')?.value);
+    const start = readPickerDate('input-start');
+    const end = readPickerDate('input-end');
 
     const hasDates = start !== '' && end !== '';
     const hasOneRequiredField = orderNum !== '' || lastName !== '' || hotelNum !== '';
@@ -403,9 +459,10 @@ document.getElementById('booking-form').onsubmit = async (e) => {
     slot.carNumber = document.getElementById('input-carNumber').value.trim();
     slot.carBrand = document.getElementById('input-carBrand').value.trim();
     slot.notes = document.getElementById('input-notes').value.trim();
-    slot.start = normalizeDate(document.getElementById('input-start').value);
-    slot.end = normalizeDate(document.getElementById('input-end').value);
+    slot.start = readPickerDate('input-start');
+    slot.end = readPickerDate('input-end');
 
+    closeDatePickers();
     document.getElementById('booking-modal').style.display = 'none';
 
     // Сразу убрать полную карточку из нижнего списка, не дожидаясь ответа Supabase.
@@ -431,8 +488,14 @@ document.getElementById('btn-cancel-no').onclick = () => {
     document.getElementById('cancel-modal').style.display = 'none';
 };
 
-document.getElementById('close-booking').onclick = () => document.getElementById('booking-modal').style.display = 'none';
-document.getElementById('btn-booking-cancel').onclick = () => document.getElementById('booking-modal').style.display = 'none';
+document.getElementById('close-booking').onclick = () => {
+    closeDatePickers();
+    document.getElementById('booking-modal').style.display = 'none';
+};
+document.getElementById('btn-booking-cancel').onclick = () => {
+    closeDatePickers();
+    document.getElementById('booking-modal').style.display = 'none';
+};
 
 function parkingDays(start, end) {
     const startDate = normalizeDate(start);

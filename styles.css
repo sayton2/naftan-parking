@@ -95,29 +95,16 @@ h2 { font-size: 16px; color: #0f172a; font-weight: 700; }
 form label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: #334155; }
 form input, form textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; background: #f8fafc; color: #0f172a; }
 
-/* Системный календарь заезда/выезда на телефоне: светлый фон и тёмные цифры. */
-input[type="date"] {
-    color-scheme: only light;
+/* Поле даты. Само окно — тёмная тема Flatpickr (dark.css), поверх модального окна. */
+#input-start,
+#input-end {
+    cursor: pointer;
     background-color: #ffffff;
     color: #0f172a;
-    -webkit-text-fill-color: #0f172a;
     min-height: 42px;
 }
-input[type="date"]::-webkit-calendar-picker-indicator {
-    color-scheme: only light;
-    opacity: 1;
-    cursor: pointer;
-    background-color: transparent;
-}
-input[type="date"]::-webkit-datetime-edit,
-input[type="date"]::-webkit-datetime-edit-fields-wrapper,
-input[type="date"]::-webkit-datetime-edit-text,
-input[type="date"]::-webkit-datetime-edit-month-field,
-input[type="date"]::-webkit-datetime-edit-day-field,
-input[type="date"]::-webkit-datetime-edit-year-field {
-    color: #0f172a;
-    -webkit-text-fill-color: #0f172a;
-    background-color: transparent;
+.flatpickr-calendar {
+    z-index: 4000;
 }
 .form-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .cancel-btn { background: #f1f5f9; color: #0f172a; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }

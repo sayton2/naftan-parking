@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Стоянка Нафтан</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/themes/dark.css">
 </head>
 <body>
     <header>
@@ -161,11 +163,11 @@
                 <div class="form-grid">
                     <div>
                         <label for="input-start">Дата заезда</label>
-                        <input type="date" id="input-start">
+                        <input type="text" id="input-start" placeholder="ГГГГ-ММ-ДД" autocomplete="off" readonly>
                     </div>
                     <div>
                         <label for="input-end">Дата выезда</label>
-                        <input type="date" id="input-end">
+                        <input type="text" id="input-end" placeholder="ГГГГ-ММ-ДД" autocomplete="off" readonly>
                     </div>
                 </div>
 
@@ -193,6 +195,8 @@
 
     <!-- Relative path required for GitHub Pages project site (/naftan-parking/).
          Absolute /script.js 404s and leaves counters at 0 with an empty map. -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ru.js"></script>
     <script type="importmap">
     {
       "imports": {
