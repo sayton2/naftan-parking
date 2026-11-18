@@ -1,12 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Prefer Vite env when present; otherwise use project defaults so a static
+// build/serve works without a local .env (publishable key is safe for clients).
+const DEFAULT_SUPABASE_URL = 'https://ifvnelxqfivarqdudkwc.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY =
+  'sb_publishable_HgiXv3phZEHSB_wOsMUIbQ_3ysfHo0A';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(
-    'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Copy .env.example to .env and fill in your project values.'
-  );
-}
+const supabaseUrl =
+  import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+const supabaseAnonKey =
+  import.meta.env.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
