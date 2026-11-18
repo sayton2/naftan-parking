@@ -1,42 +1,110 @@
-// Выделенный постоянный онлайн-контейнер стоянки Нафтан в облачной сети JsonStorage
-const CLOUD_URL = "https://jsonstorage.net";
+import { supabase } from './supabaseClient.js';
+
+const TABLE = 'parking_spots';
 
 let parkingSlots = [];
 let activeSlotId = null;
+let realtimeChannel = null;
 
 // Старт системы
 function initSystem() {
     buildInitialGrid();  // Сразу рисуем 54 места, чтобы экран не был белым
-    loadDataFromCloud(); // Подгружаем актуальные брони из интернета
-    
-    // Автоматическая синхронизация: проверяем изменения каждые 4 секунды
-    setInterval(loadDataFromCloud, 4000);
-    
+    loadDataFromCloud(); // Подгружаем актуальные брони из Supabase
+    subscribeToRealtime();
     setupValidationListeners();
 }
 
-// Загрузка данных из облака
-function loadDataFromCloud() {
-    fetch(CLOUD_URL, { cache: "no-store" })
-    .then(res => {
-        if (res.status === 404) {
-            // Если сервер еще пустой — отправляем туда нашу стартовую сетку
-            sendDataToCloud();
-            return null;
+function lineForId(i) {
+    if (i >= 16 && i <= 20) return 'B';
+    if (i >= 21 && i <= 32) return 'V';
+    if (i >= 33 && i <= 43) return 'G';
+    if (i >= 44 && i <= 54) return 'D';
+    return 'A';
+}
+
+function rowToSlot(row) {
+    return {
+        id: row.id,
+        line: row.line,
+        orderNum: row.order_num || '',
+        lastName: row.last_name || '',
+        hotelNum: row.hotel_num || '',
+        phone: row.phone || '',
+        carNumber: row.car_number || '',
+        carBrand: row.car_brand || '',
+        notes: row.notes || '',
+        start: row.start_date || '',
+        end: row.end_date || '',
+        status: 'free'
+    };
+}
+
+function slotToRow(slot) {
+    return {
+        id: slot.id,
+        line: slot.line,
+        order_num: slot.orderNum || '',
+        last_name: slot.lastName || '',
+        hotel_num: slot.hotelNum || '',
+        phone: slot.phone || '',
+        car_number: slot.carNumber || '',
+        car_brand: slot.carBrand || '',
+        notes: slot.notes || '',
+        start_date: slot.start || null,
+        end_date: slot.end || null
+    };
+}
+
+function applySlotsFromRows(rows) {
+    parkingSlots = rows
+        .map(rowToSlot)
+        .sort((a, b) => a.id - b.id);
+    recalculateSystem();
+}
+
+// Загрузка данных из Supabase
+async function loadDataFromCloud() {
+    try {
+        const { data, error } = await supabase
+            .from(TABLE)
+            .select('*')
+            .order('id', { ascending: true });
+
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+            // Таблица пуста — отправляем стартовую сетку (после запуска schema.sql обычно уже есть 54 строки)
+            await sendDataToCloud();
+            return;
         }
-        if (!res.ok) throw new Error("Сбой сети");
-        return res.json();
-    })
-    .then(data => {
-        if (data && data.length > 0) {
-            parkingSlots = data;
-            recalculateSystem();
-        }
-    })
-    .catch(err => {
-        console.log("Автономный режим работы...");
+
+        applySlotsFromRows(data);
+    } catch (err) {
+        console.log('Автономный режим работы...', err?.message || err);
         recalculateSystem();
-    });
+    }
+}
+
+function subscribeToRealtime() {
+    if (realtimeChannel) {
+        supabase.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+    }
+
+    realtimeChannel = supabase
+        .channel('parking-spots-realtime')
+        .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: TABLE },
+            () => {
+                loadDataFromCloud();
+            }
+        )
+        .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                console.log('Realtime: подключено к parking_spots');
+            }
+        });
 }
 
 // Сборка 54 мест при первом запуске
@@ -44,11 +112,7 @@ function buildInitialGrid() {
     if (parkingSlots.length > 0) return;
     parkingSlots = [];
     for (let i = 1; i <= 54; i++) {
-        let line = 'A';
-        if (i >= 16 && i <= 20) line = 'B';
-        else if (i >= 21 && i <= 32) line = 'V';
-        else if (i >= 33 && i <= 43) line = 'G';
-        else if (i >= 44 && i <= 54) line = 'D';
+        let line = lineForId(i);
 
         let slot = {
             id: i, line: line, orderNum: '', lastName: '',
@@ -68,14 +132,29 @@ function buildInitialGrid() {
     recalculateSystem();
 }
 
-// Отправка измененной брони в облако (Используем метод PUT по спецификации API)
-function sendDataToCloud() {
-    fetch(CLOUD_URL, {
-        method: 'PUT',
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parkingSlots)
-    })
-    .catch(err => console.error("Ошибка сохранения в облако:", err));
+// Сохранение всех мест (seed / полный sync)
+async function sendDataToCloud() {
+    try {
+        const rows = parkingSlots.map(slotToRow);
+        const { error } = await supabase
+            .from(TABLE)
+            .upsert(rows, { onConflict: 'id' });
+        if (error) throw error;
+    } catch (err) {
+        console.error('Ошибка сохранения в Supabase:', err);
+    }
+}
+
+// Обновление одного места (бронь / отмена)
+async function updateSpotInCloud(slot) {
+    try {
+        const { error } = await supabase
+            .from(TABLE)
+            .upsert(slotToRow(slot), { onConflict: 'id' });
+        if (error) throw error;
+    } catch (err) {
+        console.error('Ошибка обновления места в Supabase:', err);
+    }
 }
 
 function recalculateSystem() {
@@ -228,7 +307,7 @@ function renderIncompleteAlerts() {
 }
 
 // Привязка отправки формы к функции обновления облака
-document.getElementById('booking-form').onsubmit = (e) => {
+document.getElementById('booking-form').onsubmit = async (e) => {
     e.preventDefault();
     const slot = parkingSlots.find(s => s.id === activeSlotId);
 
@@ -244,18 +323,18 @@ document.getElementById('booking-form').onsubmit = (e) => {
 
     document.getElementById('booking-modal').style.display = 'none';
     
-    sendDataToCloud();
+    await updateSpotInCloud(slot);
     recalculateSystem();
 };
 
 // Привязка отмены брони
-document.getElementById('btn-cancel-yes').onclick = () => {
+document.getElementById('btn-cancel-yes').onclick = async () => {
     const slot = parkingSlots.find(s => s.id === activeSlotId);
     slot.orderNum = ''; slot.lastName = ''; slot.hotelNum = ''; slot.phone = '';
     slot.carNumber = ''; slot.carBrand = ''; slot.notes = ''; slot.start = ''; slot.end = '';
     document.getElementById('cancel-modal').style.display = 'none';
     
-    sendDataToCloud();
+    await updateSpotInCloud(slot);
     recalculateSystem();
 };
 
@@ -307,6 +386,3 @@ function formatDate(dateStr) {
 }
 
 initSystem();
-
-
-
