@@ -29,6 +29,7 @@ end;
 
 -- 4) Ensure all 54 spots exist (idempotent). Spots 1–15 = НафтанТранс defaults
 --    only when the row is still empty (does not overwrite real bookings).
+--    Same values as original buildInitialGrid / restore-naftantrans.sql.
 insert into public.parking_spots (
   id, line, order_num, last_name, hotel_num, phone, car_number, car_brand, notes, start_date, end_date
 )
@@ -55,39 +56,70 @@ on conflict (id) do update set
   line = excluded.line,
   last_name = case
     when public.parking_spots.last_name = ''
+      and coalesce(public.parking_spots.order_num, '') = ''
+      and coalesce(public.parking_spots.hotel_num, '') = ''
       and public.parking_spots.start_date is null
+      and public.parking_spots.end_date is null
       and excluded.last_name <> ''
     then excluded.last_name
     else public.parking_spots.last_name
   end,
   car_number = case
-    when public.parking_spots.car_number = ''
+    when public.parking_spots.last_name = ''
+      and coalesce(public.parking_spots.order_num, '') = ''
+      and coalesce(public.parking_spots.hotel_num, '') = ''
       and public.parking_spots.start_date is null
+      and public.parking_spots.end_date is null
       and excluded.car_number <> ''
     then excluded.car_number
     else public.parking_spots.car_number
   end,
   car_brand = case
-    when public.parking_spots.car_brand = ''
+    when public.parking_spots.last_name = ''
+      and coalesce(public.parking_spots.order_num, '') = ''
+      and coalesce(public.parking_spots.hotel_num, '') = ''
       and public.parking_spots.start_date is null
+      and public.parking_spots.end_date is null
       and excluded.car_brand <> ''
     then excluded.car_brand
     else public.parking_spots.car_brand
   end,
   start_date = case
     when public.parking_spots.start_date is null
+      and public.parking_spots.end_date is null
       and public.parking_spots.last_name = ''
+      and coalesce(public.parking_spots.order_num, '') = ''
+      and coalesce(public.parking_spots.hotel_num, '') = ''
       and excluded.start_date is not null
     then excluded.start_date
     else public.parking_spots.start_date
   end,
   end_date = case
     when public.parking_spots.end_date is null
+      and public.parking_spots.start_date is null
       and public.parking_spots.last_name = ''
+      and coalesce(public.parking_spots.order_num, '') = ''
+      and coalesce(public.parking_spots.hotel_num, '') = ''
       and excluded.end_date is not null
     then excluded.end_date
     else public.parking_spots.end_date
   end;
+
+-- 4b) Explicit НафтанТранс restore for empty spots 1–15 (same as restore-naftantrans.sql)
+update public.parking_spots
+set
+  line = 'A',
+  last_name = 'НафтанТранс',
+  car_brand = 'Фирма',
+  car_number = 'ООО',
+  start_date = date '2026-11-01',
+  end_date = date '2027-12-01'
+where id between 1 and 15
+  and coalesce(last_name, '') = ''
+  and coalesce(order_num, '') = ''
+  and coalesce(hotel_num, '') = ''
+  and start_date is null
+  and end_date is null;
 
 -- 5) Re-apply CHECKs (drop old unconstrained / wrong constraints first)
 alter table public.parking_spots drop constraint if exists parking_spots_id_check;
