@@ -22,10 +22,25 @@ function lineForId(i) {
     return 'A';
 }
 
+// Map accepts Latin A/B/V/G/D or Cyrillic А/Б/В/Г/Д (visually identical in UI labels).
+const LINE_NORMALIZE = {
+    A: 'A', B: 'B', V: 'V', G: 'G', D: 'D',
+    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D'
+};
+
+function normalizeLine(line, id) {
+    const key = (line ?? '').toString().trim();
+    if (LINE_NORMALIZE[key]) return LINE_NORMALIZE[key];
+    // Fall back to id→line so a bad/missing DB value still places the card.
+    if (id >= 1 && id <= 54) return lineForId(id);
+    return 'A';
+}
+
 function rowToSlot(row) {
+    const id = Number(row.id);
     return {
-        id: row.id,
-        line: row.line,
+        id,
+        line: normalizeLine(row.line, id),
         orderNum: row.order_num || '',
         lastName: row.last_name || '',
         hotelNum: row.hotel_num || '',
@@ -58,6 +73,7 @@ function slotToRow(slot) {
 function applySlotsFromRows(rows) {
     parkingSlots = rows
         .map(rowToSlot)
+        .filter(slot => Number.isFinite(slot.id) && slot.id >= 1 && slot.id <= 54)
         .sort((a, b) => a.id - b.id);
     recalculateSystem();
 }
@@ -75,6 +91,8 @@ async function loadDataFromCloud() {
         if (!data || data.length === 0) {
             // Таблица пуста — отправляем стартовую сетку (после запуска schema.sql обычно уже есть 54 строки)
             await sendDataToCloud();
+            // Keep the local 54-spot grid already built by buildInitialGrid.
+            recalculateSystem();
             return;
         }
 
@@ -209,10 +227,12 @@ function renderLayout() {
         card.innerHTML = label;
         card.onclick = () => handleSlotClick(slot.id);
 
-        if (slot.line === 'A') {
+        const line = normalizeLine(slot.line, slot.id);
+        slot.line = line;
+        if (line === 'A') {
             if(containers['A']) containers['A'].insertBefore(card, containers['A'].firstChild);
-        } else {
-            if(containers[slot.line]) containers[slot.line].appendChild(card);
+        } else if (containers[line]) {
+            containers[line].appendChild(card);
         }
     });
 }
@@ -377,7 +397,14 @@ function updateCounters() {
     if(elR) elR.innerText = r;
 }
 
-function getLineName(l) { return l === 'B'?'Б':l === 'V'?'В':l === 'G'?'Г':'Д'; }
+function getLineName(l) {
+    const line = normalizeLine(l);
+    if (line === 'A') return 'А';
+    if (line === 'B') return 'Б';
+    if (line === 'V') return 'В';
+    if (line === 'G') return 'Г';
+    return 'Д';
+}
 function formatDate(dateStr) {
     if (!dateStr) return '';
     const parts = dateStr.split('-');

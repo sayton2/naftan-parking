@@ -192,6 +192,15 @@
         </div>
     </div>
 
-    <script type="module" src="/script.js"></script>
+    <!-- Relative path required for GitHub Pages project site (/naftan-parking/).
+         Absolute /script.js 404s and leaves counters at 0 with an empty map. -->
+    <script type="importmap">
+    {
+      "imports": {
+        "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.81.0/+esm"
+      }
+    }
+    </script>
+    <script type="module" src="script.js"></script>
 </body>
 </html>
